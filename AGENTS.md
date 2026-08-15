@@ -40,6 +40,43 @@ read as an arbitrary pin.
 Delete this section when `v0.1.0` ships; from that point compatibility is a real
 constraint and breaking changes are evaluated, not assumed.
 
+## Versioning and what a change has to ship on
+
+Two artifacts — `mcp-server-ooxml` on npm and `ooxml-lookup` on ClawHub — with
+**independent version numbers**, coupled only when a change actually reaches
+both.
+
+- **`core/`** — normally both, since both vendor it.
+- **`skill/SKILL.md`** — the skill only. The artifact embeds it, so a trigger or
+  description fix does not reach users without a release.
+- **`mcp/README.md`** — npm only. It is the project page and only updates on a
+  release.
+- **Root `README.md`, `AGENTS.md`, `CHANGELOG.md`** — ship in neither. Commit
+  them; publish nothing.
+
+**A database rebuild is a change to both surfaces.** This is the non-obvious
+consequence of vendoring a *data* artifact and it is the thing most likely to be
+missed: `data/ooxml.db` is copied into both, so a schema-graph correction is a
+release on both even though no `.mjs` changed. `make check-vendor` is what
+notices; the release workflow's `git diff … -- skill/` sees it too, because the
+database lives under `skill/`.
+
+Registries treat a version as permanent. Never delete or re-publish a released
+version; fix forward with a bump.
+
+### Breaking changes are welcome
+
+Pre-release this is unconstrained (see above). Once released, "released"
+constrains what a *published version* means, not what the next one may do. When
+the better behaviour is incompatible with the old one, ship the better
+behaviour: remove the old one and bump.
+
+No deprecation period, no compatibility shims, no runtime warning that a
+behaviour has changed. The notice goes in `CHANGELOG.md` under the version that
+made the change, naming what moved and how to get the old outcome where one
+exists. A migration is read once; code carrying a record of its own history is
+paid for on every read after that.
+
 ## The scope boundary
 
 Two sibling projects, one question each:

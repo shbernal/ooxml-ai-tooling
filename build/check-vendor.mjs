@@ -45,6 +45,29 @@ export const VENDOR_DIRS = ['skill/scripts', 'mcp/src'];
 
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
+/**
+ * The first handful of differing dump lines.
+ *
+ * Printing a readable diff rather than two hashes is the entire reason the gate
+ * compares a canonical dump instead of raw bytes. "sha256 differs" tells you
+ * nothing about whether an ingest changed or the environment did; "these rows
+ * moved" tells you exactly.
+ */
+function diffDumps(a, b, limit = 12) {
+  const left = dumpDatabase(a).split('\n');
+  const right = dumpDatabase(b).split('\n');
+  const lines = [];
+  for (let i = 0; i < Math.max(left.length, right.length) && lines.length < limit; i += 1) {
+    if (left[i] !== right[i]) {
+      lines.push(`         line ${i + 1}`);
+      lines.push(`         - core     ${left[i] ?? '(end of dump)'}`);
+      lines.push(`         + vendored ${right[i] ?? '(end of dump)'}`);
+    }
+  }
+  if (lines.length === 0) return '         (dumps differ in length only)';
+  return `${lines.join('\n')}\n         …compare in full with: make dump`;
+}
+
 export function checkVendor({quiet = false} = {}) {
   const log = quiet ? () => {} : (message) => console.log(message);
   const problems = [];
@@ -76,7 +99,24 @@ export function checkVendor({quiet = false} = {}) {
             `DRIFT    ${dir}/${file} holds a different graph from core/${file}\n` +
               `         core     ${coreDump}\n` +
               `         vendored ${vendoredDump}\n` +
-              '         (run: make db sync-core — then read the diff of `make dump` first)',
+              `${diffDumps(corePath, vendored)}\n` +
+              '         (run: make db sync-core)',
+          );
+        }
+
+        // The byte canary. **Never fails.** SQLite's on-disk layout moves with
+        // the bundled library version, which advances inside the Node 24 line,
+        // so a byte difference here alongside a matching dump is environment
+        // drift and not an ingest regression. It is logged because it is free
+        // to observe, and because if it stays green for long enough promoting
+        // it to a real gate costs nothing. If that ever happens, record the
+        // decision — a canary quietly becoming a gate looks arbitrary later.
+        const coreBytes = sha256(readFileSync(corePath));
+        const vendoredBytes = sha256(readFileSync(vendored));
+        if (coreBytes !== vendoredBytes) {
+          log(
+            `note ${dir}/${file} is not byte-identical to a fresh build, but holds the same\n` +
+              '     graph. Expected when the bundled SQLite version differs; not an error.',
           );
         }
         continue;

@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # publish.yml calls this before it uploads anything. A tag push does not
+  # match `branches: [main]`, so without this the released ref would reach the
+  # registry with nothing verified on it.
+  workflow_call:
+
+# Everything here runs offline. The ECMA-376 schemas are vendored, so no job
+# depends on ecma-international.org being up — that was the decisive argument
+# for vendoring rather than fetching at build time.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Must precede setup-node: `cache: pnpm` needs the binary to already
+      # exist. The version comes from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      # One install covers both package trees — the root's devDependencies and
+      # mcp/'s runtime deps. The shipped core has none of its own.
+      - run: pnpm install --frozen-lockfile
+
+      # THE gate that makes committing a binary artifact honest.
+      #
+      # `core/data/ooxml.db` is not committed, so on a fresh checkout this
+      # rebuilds it from the vendored XSDs and compares it to the two committed
+      # copies by canonical-dump hash. That single check therefore proves three
+      # things at once: the database is a function of the schemas and not
+      # something hand-edited, the build is deterministic, and the vendored
+      # copies have not drifted from the core.
+      #
+      # It also runs the byte comparison as a non-blocking canary and logs the
+      # result. Never gate on that — SQLite's on-disk layout moves with the
+      # bundled library version, which advances inside the Node 24 line, so
+      # failing on it would cost a database rebuild and a release on both
+      # surfaces every time the runner's Node moved, for no functional change.
+      - name: Rebuild the database and check the vendored copies
+        run: make check-vendor
+
+      # lint --error-on-warnings, tsc --noEmit, the XSD manifest, and the suite.
+      - name: Verify
+        run: pnpm run verify
+
+      # Covers the transport, the tool registrations and the zod schemas, none
+      # of which the core suite reaches — and all of which break a client
+      # without breaking a unit test.
+      - name: Drive the MCP server over stdio
+        run: make smoke
+
+  # Not optional, and not about coverage.
+  #
+  # Three of this project's assumptions break on Windows and nowhere else: the
+  # vendored XSDs are CRLF and must not be rewritten at checkout (guarded by
+  # `-text` in .gitattributes), nothing may split raw XSD source on '\n', and
+  # build/dump.mjs must write '\n' explicitly rather than taking the platform
+  # default — otherwise its hash differs here for a reason that has nothing to
+  # do with the graph.
+  #
+  # The dump gate catches all three. Cheapest possible matrix: everything on
+  # Linux, verify plus the rebuild here.
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # `make` is not on the Windows runners, so the scripts are called
+      # directly. They are plain Node and know nothing about the platform.
+      - name: Check the vendored XSDs survived checkout unmodified
+        run: node build/check-schemas.mjs
+
+      - name: Rebuild the database and check the vendored copies
+        run: node build/check-vendor.mjs
+
+      - name: Verify
+        run: pnpm run verify
