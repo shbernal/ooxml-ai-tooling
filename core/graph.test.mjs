@@ -151,6 +151,22 @@ describe('children', () => {
     assert.ok(result.order.some((c) => c.wildcard !== undefined));
   });
 
+  test('a bare type name declared in several vocabularies returns all of them', () => {
+    // CT_Shape is declared in six vocabularies and they are unrelated types
+    // that happen to share a local name. Answering with dml-chart's — which has
+    // no children — is a confidently wrong answer to a question about p:CT_Shape.
+    const result = graph.children('CT_Shape');
+    assert.equal(result.found, true);
+    assert.equal(result.ambiguous, true);
+    assert.equal(result.variants.length, 6);
+    assert.ok(result.variants.some((v) => v.type === 'p:CT_Shape'));
+    assert.ok(result.variants.some((v) => v.type === 'v:CT_Shape'));
+    // The advice differs from the declared-in case: this one the caller can fix.
+    assert.match(result.message, /Qualify the name/);
+    // Qualifying is still a single, unambiguous answer.
+    assert.equal(graph.children('p:CT_Shape').ambiguous, undefined);
+  });
+
   test('says so when a simple type has no content model at all', () => {
     // ST_OnOff lives in shared-commonSimpleTypes, prefix `s` — not wml. Asking
     // for `w:ST_OnOff` is a different (correct) answer: unknown_symbol.
@@ -251,6 +267,42 @@ describe('values and enum', () => {
     const dml = graph.values('a:ST_Percentage');
     assert.ok(shared.facets !== undefined);
     assert.ok(dml.one_of !== undefined);
+
+    // And the bare name must not quietly answer with one of them.
+    const bare = graph.values('ST_Percentage');
+    assert.equal(bare.ambiguous, true);
+    assert.deepEqual(bare.variants.map((v) => v.type).sort(), [
+      'a:ST_Percentage',
+      's:ST_Percentage',
+    ]);
+  });
+
+  test('a bare enum name declared in several vocabularies returns all of them', () => {
+    // The sharpest case in the corpus: three vocabularies, three disjoint value
+    // sets, all plausible. Picking one answers a wml question with dml's values.
+    const bare = graph.enum('ST_Direction');
+    assert.equal(bare.found, true);
+    assert.equal(bare.ambiguous, true);
+    assert.equal(bare.variants.length, 3);
+    assert.match(bare.message, /Qualify the name/);
+
+    const byType = new Map(bare.variants.map((v) => [v.type, v.values]));
+    assert.deepEqual(byType.get('w:ST_Direction'), ['ltr', 'rtl']);
+    assert.deepEqual(byType.get('p:ST_Direction'), ['horz', 'vert']);
+    assert.deepEqual(byType.get('dml-diagram:ST_Direction'), ['norm', 'rev']);
+
+    // Qualified stays a single flat answer.
+    const qualified = graph.enum('w:ST_Direction');
+    assert.equal(qualified.ambiguous, undefined);
+    assert.deepEqual(qualified.values, ['ltr', 'rtl']);
+  });
+
+  test('declarations pointing at one type are not false ambiguity', () => {
+    // Deduplication is on the resolved target, so a name declared in many
+    // places that all resolve to the same simple type stays one answer.
+    const result = graph.values('s:ST_TwipsMeasure');
+    assert.equal(result.ambiguous, undefined);
+    assert.ok(result.one_of !== undefined);
   });
 });
 

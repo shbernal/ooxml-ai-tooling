@@ -197,6 +197,22 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
   const inProfile = (rows, profile) =>
     rows.filter((row) => symbolProfiles(row.id).includes(profile));
 
+  /**
+   * What an ambiguous answer says, which depends on why it is ambiguous.
+   *
+   * The two causes need opposite advice. A name matching several *vocabularies*
+   * is the caller's to fix — qualifying it picks one. A name declared in
+   * several places *within* a vocabulary cannot be fixed that way: `w:tblPr` is
+   * genuinely two content models and which applies depends on the parent, so
+   * the answer has to carry both and say where each holds.
+   */
+  const ambiguityMessage = (qname, resolved, noun) =>
+    resolved.ambiguity === 'vocabulary'
+      ? `"${qname}" names ${resolved.variants.length} unrelated symbols that share a local name: ` +
+        `${resolved.variants.map((v) => display(v.symbol)).join(', ')}. ` +
+        'Qualify the name to pick one.'
+      : `${qname} has ${resolved.variants.length} different ${noun} depending on where it appears.`;
+
   // ----------------------------------------------------------------- tools --
 
   /** Canonical record for a name. */
@@ -340,7 +356,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       profile,
       found: true,
       ambiguous: true,
-      message: `${qname} has ${resolved.variants.length} different content models depending on where it appears.`,
+      message: ambiguityMessage(qname, resolved, 'content models'),
       variants: resolved.variants.map(describe),
     };
   }
@@ -362,9 +378,17 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     const matches = inProfile(rows, profile);
     if (matches.length === 0) return notFound(qname, parsed, vocabularies, profile);
 
+    // A global type name is unique per vocabulary but not across them:
+    // `CT_Shape` is declared in six, and they are unrelated types that happen
+    // to share a name. Returning the first is the silent pick rule 3 forbids,
+    // and it is the wrong one five times out of six.
     const asType = matches.filter((r) => r.kind === 'complexType' || r.kind === 'group');
     if (asType.length > 0) {
-      return {found: true, variants: [{symbol: asType[0], via: null, declaredIn: []}]};
+      return {
+        found: true,
+        ambiguity: 'vocabulary',
+        variants: asType.map((symbol) => ({symbol, via: null, declaredIn: []})),
+      };
     }
 
     const declarations = matches.filter((r) => r.type_symbol_id !== null);
@@ -389,6 +413,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
 
     return {
       found: true,
+      ambiguity: 'declaration_site',
       variants: [...byType.entries()].map(([typeSymbolId, sites]) => ({
         symbol: symbolById(typeSymbolId),
         via: `${display(sites[0])} -> ${displayRef(sites[0].type_ref)}`,
@@ -580,18 +605,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     }
 
     state.seenGroups.add(group.id);
-    node.children = topLevelParticles(
-      group.id,
-      pid,
-      state,
-      depth + 1,
-      expandGroups,
-      contributedBy,
-    ).flatMap((child) =>
-      child.kind === 'sequence' || child.kind === 'choice' || child.kind === 'all'
-        ? [child]
-        : [child],
-    );
+    node.children = topLevelParticles(group.id, pid, state, depth + 1, expandGroups, contributedBy);
     state.seenGroups.delete(group.id);
     return node;
   }
@@ -718,61 +732,100 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       profile,
       found: true,
       ambiguous: true,
-      message: `${qname} has ${resolved.variants.length} different types depending on where it appears.`,
+      message: ambiguityMessage(qname, resolved, 'types'),
       variants: resolved.variants.map(describe),
     };
   }
 
   // --------------------------------------------------------------- values ---
 
-  /** Enumeration values only. Fails usefully when the type is not enumerated. */
-  function enumValues(qname, {profile = DEFAULT_PROFILE} = {}) {
-    const pid = profileId(profile);
+  /**
+   * Every distinct simple type a name resolves to.
+   *
+   * `resolveToType`'s counterpart for the value-space tools, and the sharper
+   * case of the same hazard: `ST_Direction` is `ltr|rtl` in wml, `horz|vert` in
+   * pml and `norm|rev` in dml-diagram. Collapsing that to one is not a partial
+   * answer, it is a wrong one that reads as authoritative.
+   *
+   * Deduplicated on the resolved *target*, so several declarations pointing at
+   * one type stay a single answer rather than becoming false ambiguity.
+   */
+  function resolveToSimpleType(qname, profile) {
     const {parsed, vocabularies, rows} = lookup(qname, {
       kind: ['simpleType', 'attribute', 'element'],
     });
     const matches = inProfile(rows, profile);
-    if (matches.length === 0)
-      return {query: qname, profile, ...notFound(qname, parsed, vocabularies, profile)};
+    if (matches.length === 0) return notFound(qname, parsed, vocabularies, profile);
 
-    const target = matches.find((r) => r.kind === 'simpleType') ?? matches[0];
-    const symbolId = target.kind === 'simpleType' ? target.id : target.type_symbol_id;
-    if (symbolId === null) {
-      return {
-        query: qname,
-        profile,
-        found: false,
-        reason: 'not_a_simple_type',
-        message: `${qname} has no simple type to enumerate.`,
-      };
+    const targets = [];
+    const seen = new Set();
+    for (const row of matches) {
+      const symbolId = row.kind === 'simpleType' ? row.id : row.type_symbol_id;
+      const key = symbolId === null ? `ref:${row.type_ref}` : `id:${symbolId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push({row, symbolId});
     }
+    return {found: true, targets};
+  }
 
-    const values = handle.all(
-      'SELECT value FROM enums WHERE symbol_id = ? AND profile_id = ? ORDER BY order_index',
-      symbolId,
-      pid,
-    );
-    if (values.length === 0) {
+  const targetName = ({row, symbolId}) =>
+    symbolId === null ? displayRef(row.type_ref) : display(symbolById(symbolId));
+
+  const simpleTypeAmbiguityMessage = (qname, targets) =>
+    `"${qname}" resolves to ${targets.length} unrelated types that share a local name: ` +
+    `${targets.map(targetName).join(', ')}. Qualify the name to pick one.`;
+
+  /** Enumeration values only. Says so usefully when the type is not enumerated. */
+  function enumValues(qname, {profile = DEFAULT_PROFILE} = {}) {
+    const pid = profileId(profile);
+    const resolved = resolveToSimpleType(qname, profile);
+    if (resolved.found === false) return {query: qname, profile, ...resolved};
+
+    const describe = (target) => {
+      if (target.symbolId === null) {
+        return {
+          type: targetName(target),
+          enumerated: false,
+          reason: 'not_a_simple_type',
+          message: `${display(target.row)} has no simple type to enumerate.`,
+          values: [],
+        };
+      }
+      const name = targetName(target);
+      const values = handle.all(
+        'SELECT value FROM enums WHERE symbol_id = ? AND profile_id = ? ORDER BY order_index',
+        target.symbolId,
+        pid,
+      );
       // Not an error — most simple types are bounded by facets or unions rather
       // than enumerated, and `values` is the tool that answers those.
+      if (values.length === 0) {
+        return {
+          type: name,
+          enumerated: false,
+          message: `${name} is not an enumerated type; use values() for its facets and union members.`,
+          values: [],
+        };
+      }
       return {
-        query: qname,
-        profile,
-        found: true,
-        type: display(symbolById(symbolId)),
-        enumerated: false,
-        message: `${qname} is not an enumerated type; use values() for its facets and union members.`,
-        values: [],
+        type: name,
+        enumerated: true,
+        count: values.length,
+        values: values.map((v) => v.value),
       };
+    };
+
+    if (resolved.targets.length === 1) {
+      return {query: qname, profile, found: true, ...describe(resolved.targets[0])};
     }
     return {
       query: qname,
       profile,
       found: true,
-      type: display(symbolById(symbolId)),
-      enumerated: true,
-      count: values.length,
-      values: values.map((v) => v.value),
+      ambiguous: true,
+      message: simpleTypeAmbiguityMessage(qname, resolved.targets),
+      variants: resolved.targets.map(describe),
     };
   }
 
@@ -787,32 +840,37 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
    */
   function values(qname, {profile = DEFAULT_PROFILE} = {}) {
     const pid = profileId(profile);
-    const {parsed, vocabularies, rows} = lookup(qname, {
-      kind: ['simpleType', 'attribute', 'element'],
-    });
-    const matches = inProfile(rows, profile);
-    if (matches.length === 0)
-      return {query: qname, profile, ...notFound(qname, parsed, vocabularies, profile)};
+    const resolved = resolveToSimpleType(qname, profile);
+    if (resolved.found === false) return {query: qname, profile, ...resolved};
 
-    const target = matches.find((r) => r.kind === 'simpleType') ?? matches[0];
-    const symbolId = target.kind === 'simpleType' ? target.id : target.type_symbol_id;
-    if (symbolId === null) {
-      return {
-        query: qname,
-        profile,
-        found: true,
-        type: displayRef(target.type_ref),
-        builtin: true,
-        message: `${qname} is typed ${displayRef(target.type_ref)}, an XSD built-in; its value space is the XSD one.`,
-      };
+    const describe = (target) => {
+      if (target.symbolId === null) {
+        if (target.row.type_ref === null) {
+          return {
+            type: null,
+            message: `${display(target.row)} declares no type, so it has no value space in the schema.`,
+          };
+        }
+        const name = targetName(target);
+        return {
+          type: name,
+          builtin: true,
+          message: `${display(target.row)} is typed ${name}, an XSD built-in; its value space is the XSD one.`,
+        };
+      }
+      return {type: targetName(target), ...describeValueSpace(target.symbolId, pid, 0)};
+    };
+
+    if (resolved.targets.length === 1) {
+      return {query: qname, profile, found: true, ...describe(resolved.targets[0])};
     }
-
     return {
       query: qname,
       profile,
       found: true,
-      type: display(symbolById(symbolId)),
-      ...describeValueSpace(symbolId, pid, 0),
+      ambiguous: true,
+      message: simpleTypeAmbiguityMessage(qname, resolved.targets),
+      variants: resolved.targets.map(describe),
     };
   }
 

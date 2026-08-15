@@ -8,7 +8,8 @@ element and in what order, what attributes it takes, what values those
 attributes accept, which namespace to write, and what changes between the
 Transitional and Strict profiles.
 
-> **Pre-release.** Nothing is published yet and the tool surface may change.
+> **Early release (`0.0.x`).** The tool surface is not frozen and may change
+> without a deprecation period. Pin a version if that matters to you.
 
 ## Install
 
@@ -53,7 +54,10 @@ otherwise a confidently wrong answer:
   it.
 - **An ambiguous name returns every meaning.** OOXML declares element names
   locally, so `w:tblPr` genuinely has two different content models depending on
-  where it appears. Both come back, each labelled with where it applies.
+  where it appears. Both come back, each labelled with where it applies. The
+  same holds across vocabularies: bare `ST_Direction` is `ltr|rtl` in wml,
+  `horz|vert` in pml and `norm|rev` in dml-diagram, and answering with one of
+  them would be wrong two times in three.
 
 ## Profiles
 

@@ -99,8 +99,11 @@ unit suffixes are a closed set.
   declares `purl.oclc.org/ooxml/...` namespaces, pass `--profile strict`.
   `diff` shows what changes for one symbol.
 - **A name is not an identity.** `ST_Percentage` is a pattern-restricted string
-  in `shared-commonSimpleTypes` and a *union* in `dml-main`. Qualify names when
-  you can: `s:ST_Percentage`, not `ST_Percentage`.
+  in `shared-commonSimpleTypes` and a *union* in `dml-main`; `ST_Direction` is
+  `ltr|rtl` in wml, `horz|vert` in pml and `norm|rev` in dml-diagram. A bare
+  name like that comes back as `ambiguous:true` with a `variants` array rather
+  than one arbitrary answer, so **check for `variants` before reading a
+  result**. Qualify names when you can: `s:ST_Percentage`, not `ST_Percentage`.
 - **An empty answer is often correct.** `attributes w:CT_Tbl` returns nothing
   because wml carries table properties as child elements. `found:true` with
   `count:0` means "none", not "lookup failed".
@@ -116,6 +119,12 @@ rather than guessing.
 
 Prefixes are the conventional ones (`w`, `a`, `p`, `s`, `m`, `r`, `v`). Run
 `namespace <uri>` to go the other way.
+
+An ambiguous name returns `ambiguous:true` and a `variants` array, one entry per
+distinct meaning. The `message` says which kind of ambiguity it is: several
+vocabularies sharing a local name (qualify it, and you get one answer), or one
+name declared in several places within a vocabulary — `w:tblPr` — where the
+answer depends on the parent and each variant carries `applies_when_declared_in`.
 
 ## Direct SQL, when the subcommands do not fit
 
