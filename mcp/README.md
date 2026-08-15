@@ -59,6 +59,22 @@ otherwise a confidently wrong answer:
   `horz|vert` in pml and `norm|rev` in dml-diagram, and answering with one of
   them would be wrong two times in three.
 
+## Prefixes
+
+Write a name however you have it: `w:tblPr`, `wml:tblPr`, Clark notation
+`{uri}tblPr`, or bare.
+
+The schemas do not bind a prefix to every namespace — nothing binds one to
+spreadsheetml's own, or to charts — so `x` and `c` are accepted on the strength
+of what the ecosystem writes instead, `ooxml_namespace` reports them under
+`aliases` with a citation, and the standard's own answer (`prefix: null`) is
+left as it is. Answers come back in the canonical spelling, so `x:worksheet`
+resolves and replies `sml:worksheet`; `x` is also VML's excel namespace, and
+printing both as `x:` would render two different namespaces identically.
+
+This is what lets `ooxml_explain` take a spreadsheet diagnostic as the validator
+emits it — `/x:worksheet[1]/x:pageSetup[1]` — without anything in between.
+
 ## Profiles
 
 Answers default to **Transitional**, which is what Word, Excel and PowerPoint

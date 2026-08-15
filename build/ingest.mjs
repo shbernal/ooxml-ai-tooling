@@ -279,6 +279,19 @@ export function writeSymbols(db, parsed, universe) {
     }
   }
 
+  const insertAlias = db.prepare(
+    'INSERT INTO prefix_aliases (id, vocabulary_id, prefix, source) VALUES (?, ?, ?, ?)',
+  );
+  for (const [i, alias] of PREFIX_ALIASES.entries()) {
+    const vocabularyId = vocabIds.get(alias.vocabulary);
+    // A typo here would silently drop the alias, and the symptom — a prefix
+    // that still does not resolve — looks exactly like the bug this fixes.
+    if (vocabularyId === undefined) {
+      throw new Error(`prefix alias names an unknown vocabulary: ${alias.vocabulary}`);
+    }
+    insertAlias.run(i + 1, vocabularyId, alias.prefix, alias.source);
+  }
+
   // Insert in id order so the rowids the file ends up with match the ids we
   // computed — belt and braces, since the id is given explicitly anyway.
   const ordered = [...ids.keys()].sort((a, b) => ids.get(a) - ids.get(b));
@@ -308,6 +321,43 @@ export function writeSymbols(db, parsed, universe) {
 
   return {profileIds, vocabIds};
 }
+
+/**
+ * Prefixes the ecosystem writes for namespaces the XSDs never prefix.
+ *
+ * `observedPrefixes` below is right that inventing a prefix would be inventing
+ * convention. This table is the other half of that thought: a convention that
+ * is *written down somewhere checkable* is evidence too, and refusing to record
+ * it does not make the tool more honest — it makes it unable to answer in the
+ * spelling its own inputs arrive in. `explain` consumes `ooxml-validate`
+ * diagnostics, whose xpaths come from the Open XML SDK, and for a spreadsheet
+ * that is `/x:worksheet[1]/x:pageSetup[1]`. With `sml` left NULL every one of
+ * those resolved to `found: false` — the flagship tool dark across an entire
+ * vocabulary, on real unmodified input.
+ *
+ * These are input spellings only. Output stays canonical (`sml:worksheet`, not
+ * `x:worksheet`), which keeps the two `x` namespaces distinguishable on sight
+ * and lets an answer teach the unambiguous name.
+ *
+ * The bar for a row: real traffic, and a citation someone can go and check.
+ * Seven vocabularies are still NULL after this and should stay that way until
+ * one of them fails the same way `sml` did — a plausible guess is worth less
+ * than a missing answer, because a wrong prefix resolves to something.
+ */
+const PREFIX_ALIASES = [
+  {
+    vocabulary: 'dml-chart',
+    prefix: 'c',
+    source:
+      'universal in written packages: every chart part is rooted at <c:chartSpace xmlns:c="…/drawingml/2006/chart">',
+  },
+  {
+    vocabulary: 'sml',
+    prefix: 'x',
+    source:
+      'the Open XML SDK, which is what validator xpaths are written in: /x:worksheet[1]/x:pageSetup[1]',
+  },
+];
 
 /**
  * The prefix each namespace is conventionally written with, observed across the

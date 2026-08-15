@@ -40,6 +40,17 @@ export function parseQName(input) {
  * ingest — so the same prefix could in principle name two vocabularies. Where
  * that happens the prefix maps to all of them and the caller resolves the
  * ambiguity the same way it resolves a bare name, rather than silently picking.
+ *
+ * `prefix_aliases` feeds the same map, which is the point: `x` names both VML's
+ * excel namespace (which the schemas bind) and `sml` (which they do not, but
+ * every validator diagnostic does). Merging them means the existing
+ * several-candidates path handles the collision, and no new rule is needed —
+ * `x:worksheet` finds the one vocabulary that has a `worksheet`, `x:ClientData`
+ * finds the other, and a name in both would come back as two matches.
+ *
+ * Aliases are recorded on the vocabulary as `aliasPrefixes` rather than merged
+ * into `namespaces[].prefix`, so `formatQName` keeps emitting the canonical
+ * spelling and nothing downstream starts printing an ambiguous prefix.
  */
 export function loadVocabularyIndex(db) {
   const byKey = new Map();
@@ -54,16 +65,33 @@ export function loadVocabularyIndex(db) {
       ORDER BY v.key, p.id`,
   );
 
+  const addPrefix = (prefix, key) => {
+    if (!byPrefix.has(prefix)) byPrefix.set(prefix, new Set());
+    byPrefix.get(prefix).add(key);
+  };
+
   for (const row of rows) {
-    if (!byKey.has(row.key)) byKey.set(row.key, {id: row.id, key: row.key, namespaces: []});
+    if (!byKey.has(row.key)) {
+      byKey.set(row.key, {id: row.id, key: row.key, namespaces: [], aliasPrefixes: []});
+    }
     byKey
       .get(row.key)
       .namespaces.push({uri: row.uri, prefix: row.preferred_prefix, profile: row.profile});
     byUri.set(row.uri, row.key);
-    if (row.preferred_prefix !== null) {
-      if (!byPrefix.has(row.preferred_prefix)) byPrefix.set(row.preferred_prefix, new Set());
-      byPrefix.get(row.preferred_prefix).add(row.key);
-    }
+    if (row.preferred_prefix !== null) addPrefix(row.preferred_prefix, row.key);
+  }
+
+  const aliases = db.all(
+    `SELECT v.key, a.prefix, a.source
+       FROM prefix_aliases a
+       JOIN vocabularies v ON v.id = a.vocabulary_id
+      ORDER BY a.prefix, v.key`,
+  );
+  for (const row of aliases) {
+    const vocabulary = byKey.get(row.key);
+    if (vocabulary === undefined) continue;
+    vocabulary.aliasPrefixes.push({prefix: row.prefix, source: row.source});
+    addPrefix(row.prefix, row.key);
   }
 
   return {byKey, byPrefix, byUri, all: [...byKey.values()]};

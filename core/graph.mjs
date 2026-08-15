@@ -188,10 +188,20 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     };
   }
 
+  // Aliases are included because this list is advice for a caller who just
+  // mistyped a prefix, and "the prefixes that work" is the useful set — a
+  // spelling we accept but omit here reads as unsupported.
   const knownPrefixes = () =>
     [
-      ...new Set(index.all.flatMap((v) => v.namespaces.map((n) => n.prefix)).filter(Boolean)),
-    ].sort();
+      ...new Set(
+        index.all.flatMap((v) => [
+          ...v.namespaces.map((n) => n.prefix),
+          ...v.aliasPrefixes.map((a) => a.prefix),
+        ]),
+      ),
+    ]
+      .filter(Boolean)
+      .sort();
 
   /** Only symbols actually present in the requested profile. */
   const inProfile = (rows, profile) =>
@@ -925,19 +935,30 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
 
   // ------------------------------------------------------------ namespace ---
 
-  /** URI to vocabulary and back, in both directions, for both profiles. */
+  /**
+   * URI to vocabulary and back, in both directions, for both profiles.
+   *
+   * An alias prefix matches here too, and says so: `prefix` keeps reporting what
+   * the schemas bind (NULL when they bind nothing), and `aliases` carries the
+   * accepted spellings with the citation for each. Folding an alias into
+   * `prefix` would make this tool claim the standard mandates a prefix it does
+   * not, which is the claim the NULL exists to avoid.
+   */
   function namespace(query, {profile = null} = {}) {
     const text = String(query ?? '').trim();
     const matches = [];
     for (const vocabulary of index.all) {
+      const aliases = vocabulary.aliasPrefixes;
+      const aliasHit = aliases.some((a) => a.prefix === text);
       for (const ns of vocabulary.namespaces) {
         if (profile !== null && ns.profile !== profile) continue;
-        if (ns.uri === text || ns.prefix === text || vocabulary.key === text) {
+        if (ns.uri === text || ns.prefix === text || vocabulary.key === text || aliasHit) {
           matches.push({
             vocabulary: vocabulary.key,
             uri: ns.uri,
             prefix: ns.prefix,
             profile: ns.profile,
+            ...(aliases.length === 0 ? {} : {aliases}),
           });
         }
       }

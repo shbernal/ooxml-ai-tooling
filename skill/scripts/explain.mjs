@@ -44,6 +44,15 @@
  * phrases these consistently, but the regexes are anchored loosely on purpose —
  * a missed capture degrades to "here is what is legal here", which is still the
  * useful half.
+ *
+ * `summary` therefore takes `name` as `string | null` and **every template must
+ * handle null**, because a missed capture is a normal outcome rather than an
+ * edge case. Substituting a placeholder into the quoted slot is not an option:
+ * `The 'it' attribute is not allowed on x:sheet` reads as a real attribute
+ * called `it`, which is a confident answer to a question we did not understand.
+ * The nameless phrasing also has to match what `resolveLegal` returns — without
+ * a name it cannot narrow to one attribute's value space, so those two ids
+ * promise the attribute list instead.
  */
 const DIAGNOSTICS = {
   Sch_UndeclaredAttribute: {
@@ -51,42 +60,54 @@ const DIAGNOSTICS = {
     answer: 'attributes',
     extract: /'([^']+)' attribute is not declared/,
     summary: (name, position) =>
-      `The '${name}' attribute is not allowed on ${position}. Its legal attributes are listed below.`,
+      name === null
+        ? `An attribute given on ${position} is not allowed there. Its legal attributes are listed below.`
+        : `The '${name}' attribute is not allowed on ${position}. Its legal attributes are listed below.`,
   },
   Sch_MissRequiredAttribute: {
     finding: 'missing_required_attribute',
     answer: 'attributes',
     extract: /'([^']+)' attribute is required/,
     summary: (name, position) =>
-      `${position} requires the '${name}' attribute. Every attribute it accepts is listed below, with its use.`,
+      name === null
+        ? `${position} is missing a required attribute. Every attribute it accepts is listed below, with its use.`
+        : `${position} requires the '${name}' attribute. Every attribute it accepts is listed below, with its use.`,
   },
   Sch_AttributeValueDataTypeDetailed: {
     finding: 'invalid_attribute_value',
     answer: 'attribute_values',
     extract: /attribute '([^']+)'/,
     summary: (name, position) =>
-      `The value given for '${name}' on ${position} is outside its type's value space, shown below.`,
+      name === null
+        ? `An attribute value on ${position} is outside the value space of its type. Which attribute could not be read from the diagnostic, so every attribute it accepts is listed below, with its type.`
+        : `The value given for '${name}' on ${position} is outside its type's value space, shown below.`,
   },
   Sch_InvalidAttributeValue: {
     finding: 'invalid_attribute_value',
     answer: 'attribute_values',
     extract: /attribute '([^']+)'/,
     summary: (name, position) =>
-      `The value given for '${name}' on ${position} is not legal. Its value space is shown below.`,
+      name === null
+        ? `An attribute value on ${position} is not legal. Which attribute could not be read from the diagnostic, so every attribute it accepts is listed below, with its type.`
+        : `The value given for '${name}' on ${position} is not legal. Its value space is shown below.`,
   },
   Sch_UnexpectedElementContentExpectingComplex: {
     finding: 'unexpected_child',
     answer: 'children',
     extract: /element '([^']+)'/,
     summary: (name, position) =>
-      `'${name}' is not legal inside ${position} at that position. The legal content model is below, in order.`,
+      name === null
+        ? `Something inside ${position} is not legal at that position. The legal content model is below, in order.`
+        : `'${name}' is not legal inside ${position} at that position. The legal content model is below, in order.`,
   },
   Sch_UnexpectedElementQNameOrText: {
     finding: 'unexpected_child',
     answer: 'children',
     extract: /element '([^']+)'/,
     summary: (name, position) =>
-      `${position} does not accept '${name}' there. The legal content model is below, in order.`,
+      name === null
+        ? `${position} does not accept the content found there. The legal content model is below, in order.`
+        : `${position} does not accept '${name}' there. The legal content model is below, in order.`,
   },
   Sch_IncompleteContentExpectingComplex: {
     finding: 'incomplete_content',
@@ -172,7 +193,7 @@ export function explainDiagnostic(graph, diagnostic, {profile = 'transitional'} 
     ...(known
       ? {
           finding: {kind: spec.finding, ...(named === null ? {} : {name: named})},
-          message: spec.summary(named ?? 'it', element),
+          message: spec.summary(named, element),
         }
       : {
           reason: id === null ? 'no_id' : 'unrecognised_id',
@@ -232,13 +253,31 @@ function childTypeOf(parentType, childName, graph, profile) {
   return graph.children(child.type, {profile});
 }
 
+/**
+ * The attribute list at a position, narrowed by the ancestor chain where it can
+ * be.
+ *
+ * The same trick `narrowByPath` does for content models, and needed for the
+ * same reason: `pageSetup` is `CT_PageSetup` on a worksheet and
+ * `CT_CsPageSetup` on a chartsheet, with *different attribute sets*, so
+ * answering from whichever variant sorted first is a confidently wrong answer
+ * about a real spreadsheet. The diagnostic's xpath says `/x:worksheet/…`, which
+ * settles it.
+ */
+function attributesAt(graph, element, profile, steps) {
+  const result = graph.attributes(element, {profile});
+  const narrowed = narrowByPath(result, steps, graph, profile);
+  if (narrowed === null) return result;
+  return {query: result.query, profile: result.profile, found: true, ...narrowed};
+}
+
 /** Compose the existing tools rather than querying again — one query layer, not two. */
 function resolveLegal(graph, answer, element, named, profile, steps = []) {
   if (answer === 'attributes') {
-    return {kind: 'attributes', ...graph.attributes(element, {profile})};
+    return {kind: 'attributes', ...attributesAt(graph, element, profile, steps)};
   }
   if (answer === 'attribute_values') {
-    const attributes = graph.attributes(element, {profile});
+    const attributes = attributesAt(graph, element, profile, steps);
     if (attributes.found === true && named !== null) {
       // Narrow to the attribute the diagnostic actually named, and resolve its
       // type's value space — the bounds and pattern are the answer, not the

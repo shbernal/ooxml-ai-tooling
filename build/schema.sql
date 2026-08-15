@@ -93,6 +93,41 @@ CREATE TABLE namespaces (
   UNIQUE (vocabulary_id, profile_id)
 );
 
+-- Prefixes the *ecosystem* writes for a namespace the XSDs themselves never
+-- prefix. The only table here that is not derived from `schemas/`, which is why
+-- `source` is NOT NULL: every row has to say where it came from.
+--
+-- `namespaces.preferred_prefix` reports what the schema files are observed to
+-- bind, and stays NULL when nothing binds one (see `observedPrefixes` in the
+-- ingest). That is the honest answer to "what does the standard say", and it is
+-- the wrong answer to "what will an agent type" — nine vocabularies come back
+-- NULL, including `sml`, and a validator diagnostic for a spreadsheet is written
+-- `/x:worksheet[1]/x:pageSetup[1]`. A lookup table that cannot resolve the
+-- prefix its own `explain` input arrives in is not being honest, just unhelpful.
+--
+-- So this is a *second* evidence source rather than a fallback invention, and
+-- the distinction is the whole reason it is a separate table: nothing is
+-- overwritten, nothing XSD-derived is guessed at, and the two can be told apart
+-- in a query. It is deliberately not keyed by profile — a prefix is a spelling
+-- convention for a vocabulary, and Transitional and Strict are the same
+-- vocabulary under different URIs.
+--
+-- Kept small on purpose. Only prefixes with real traffic and a checkable
+-- citation go in; the remaining NULLs stay NULL rather than being padded out
+-- with plausible-looking guesses.
+--
+-- A prefix may name more than one vocabulary — `x` is also VML's excel
+-- namespace, which the schemas *do* bind — and that is handled, not avoided:
+-- resolution collects every candidate and the caller reports all matches, the
+-- same way it already handles an ambiguous bare name.
+CREATE TABLE prefix_aliases (
+  id            INTEGER PRIMARY KEY,
+  vocabulary_id INTEGER NOT NULL REFERENCES vocabularies(id),
+  prefix        TEXT NOT NULL,
+  source        TEXT NOT NULL,   -- where the convention was observed; free text, always cited
+  UNIQUE (vocabulary_id, prefix)
+);
+
 -- Elements, attributes, and the named definitions they refer to.
 --
 -- `parent_symbol_id` is 0 for a top-level (global) declaration and otherwise the

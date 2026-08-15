@@ -117,8 +117,18 @@ Write them any way you like — `w:tblPr`, `wml:tblPr`,
 `tblPr`. A bare name that matches several vocabularies returns all of them
 rather than guessing.
 
-Prefixes are the conventional ones (`w`, `a`, `p`, `s`, `m`, `r`, `v`). Run
-`namespace <uri>` to go the other way.
+Prefixes are the conventional ones (`w`, `a`, `p`, `s`, `m`, `r`, `v`, `x`, `c`,
+`o`, `xdr`, `wp`, …). Run `namespace <uri>` to go the other way, or
+`namespace <prefix>` to see which vocabulary a prefix reaches.
+
+Two of those — `x` for spreadsheetml and `c` for charts — are accepted because
+the ecosystem writes them, not because a schema binds them; `namespace` reports
+those under `aliases` with a citation, and leaves `prefix` null, which is what
+the standard actually says. **Answers come back in the canonical spelling**, so
+`element x:worksheet` replies `sml:worksheet`. That is deliberate: `x` is *also*
+VML's excel namespace, and printing both as `x:` would render two different
+namespaces identically. The lookup checks both and returns whichever actually
+has the name.
 
 An ambiguous name returns `ambiguous:true` and a `variants` array, one entry per
 distinct meaning. The `message` says which kind of ambiguity it is: several
@@ -135,9 +145,9 @@ node scripts/ooxml.mjs sql "SELECT local_name FROM symbols
   WHERE kind='complexType' AND local_name LIKE 'CT_Tbl%'"
 ```
 
-Tables: `profiles`, `vocabularies`, `namespaces`, `symbols`, `symbol_profiles`,
-`compositors`, `child_edges`, `group_edges`, `attr_edges`, `inheritance_edges`,
-`enums`, `simple_type_facets`, `union_members`.
+Tables: `profiles`, `vocabularies`, `namespaces`, `prefix_aliases`, `symbols`,
+`symbol_profiles`, `compositors`, `child_edges`, `group_edges`, `attr_edges`,
+`inheritance_edges`, `enums`, `simple_type_facets`, `union_members`.
 
 Two things to know before writing a join. Symbols are keyed on the
 **vocabulary**, not the namespace URI, because the two profiles are the same

@@ -320,6 +320,60 @@ describe('namespace', () => {
     const result = graph.namespace('http://example.com/not-ooxml');
     assert.equal(result.found, false);
     assert.ok(result.known_prefixes.includes('w'));
+    // Advice a caller acts on, so it lists what actually resolves — an accepted
+    // spelling missing from here reads as unsupported.
+    assert.ok(result.known_prefixes.includes('c'));
+  });
+
+  test('an alias is reported as an alias, not as what the schemas bind', () => {
+    const sml = graph.namespace('sml').namespaces.find((n) => n.profile === 'transitional');
+    // The NULL is the honest answer to "what does the standard mandate" and has
+    // to survive: nothing binds a prefix to SpreadsheetML's own namespace.
+    assert.equal(sml.prefix, null);
+    assert.deepEqual(
+      sml.aliases.map((a) => a.prefix),
+      ['x'],
+    );
+    assert.match(sml.aliases[0].source, /Open XML SDK/);
+  });
+
+  test('a prefix the schemas do bind keeps reporting itself', () => {
+    const vml = graph
+      .namespace('vml-spreadsheetDrawing')
+      .namespaces.find((n) => n.profile === 'transitional');
+    assert.equal(vml.prefix, 'x');
+    assert.equal(vml.aliases, undefined);
+  });
+});
+
+describe('alias prefixes', () => {
+  // `x` names two vocabularies: VML's excel namespace, which the schemas bind,
+  // and sml, which nothing binds but every validator diagnostic writes. The
+  // collision is resolved by looking the local name up in both, which is the
+  // path an ambiguous bare name already takes.
+  test('an alias resolves a name the observed prefix cannot', () => {
+    const result = graph.element('x:worksheet');
+    assert.equal(result.found, true);
+    assert.equal(result.symbols[0].vocabulary, 'sml');
+  });
+
+  test('and does not steal the vocabulary that owns the prefix', () => {
+    const result = graph.element('x:ClientData');
+    assert.equal(result.found, true);
+    assert.equal(result.symbols[0].vocabulary, 'vml-spreadsheetDrawing');
+  });
+
+  test('c reaches dml-chart, which no schema prefixes either', () => {
+    assert.equal(graph.element('c:ser').found, true);
+    assert.ok(graph.children('c:chartSpace').found);
+  });
+
+  test('output stays canonical, so the ambiguous spelling is never printed back', () => {
+    // Answering `x:worksheet` with `x:worksheet` would render two different
+    // namespaces identically. The canonical name is also the one that teaches.
+    const result = graph.element('x:worksheet');
+    assert.equal(result.symbols[0].qname, 'sml:worksheet');
+    assert.equal(graph.attributes('x:sheet').type, 'sml:CT_Sheet');
   });
 });
 

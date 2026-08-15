@@ -148,6 +148,86 @@ describe('explain', () => {
     assert.equal(result.resolved, true);
     assert.equal(result.finding.name, undefined);
     assert.ok(result.legal.attributes.length > 0);
+    // And it costs the name *silently*: no placeholder in the quoted slot, or
+    // the message invents an attribute called 'it'.
+    assert.doesNotMatch(result.message, /'/);
+    assert.match(result.message, /An attribute given on w:ind is not allowed there/);
+  });
+
+  test('no name means no quoted name, for every id that quotes one', () => {
+    // The regexes are anchored loosely, so a miss is a normal outcome for any
+    // of these — every nameless phrasing has to stand on its own.
+    for (const id of SUPPORTED_DIAGNOSTIC_IDS) {
+      const result = explainDiagnostic(graph, {
+        id,
+        description: 'wording we did not anticipate',
+        xpath: '/w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]',
+      });
+      assert.equal(result.resolved, true, id);
+      assert.equal(result.finding.name, undefined, id);
+      assert.doesNotMatch(result.message, /'/, `${id} quoted a name it never extracted`);
+      assert.match(result.message, /w:ind/, id);
+    }
+  });
+
+  test('nameless value diagnostics promise the answer they actually return', () => {
+    // Without a name there is no attribute to narrow to, so `legal` degrades to
+    // the whole attribute list. A message still pointing at "its value space,
+    // shown below" would be describing a key that is not in the response.
+    const result = explainDiagnostic(graph, {
+      id: 'Sch_AttributeValueDataTypeDetailed',
+      description: 'wording we did not anticipate',
+      xpath: '/w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]',
+    });
+    assert.equal(result.legal.kind, 'attributes');
+    assert.match(result.message, /every attribute it accepts is listed below/);
+  });
+
+  test('resolves a real spreadsheet diagnostic, written in the SDK prefix', () => {
+    // Copied verbatim from ooxml-validate's own fixture for a dirty .xlsx. This
+    // is the input `explain` exists to consume, and before `x` resolved it came
+    // back `found: false` — the tool dark across all of SpreadsheetML.
+    const result = explainDiagnostic(graph, {
+      id: 'Sch_AttributeValueDataTypeDetailed',
+      description:
+        "The attribute 'copies' has invalid value '0'. The MinInclusive constraint failed. The value must be greater than or equal to 1.",
+      partUri: '/xl/worksheets/sheet1.xml',
+      xpath: '/x:worksheet[1]/x:pageSetup[1]',
+    });
+    assert.equal(result.resolved, true);
+    assert.equal(result.legal.found, undefined);
+    assert.equal(result.legal.attribute.name, 'copies');
+  });
+
+  test('narrows an ambiguous attribute owner by the ancestor path', () => {
+    // `pageSetup` is CT_PageSetup on a worksheet and CT_CsPageSetup on a
+    // chartsheet, with different attribute sets. Answering from whichever
+    // variant sorts first is a confidently wrong answer; the xpath settles it.
+    assert.equal(graph.attributes('x:pageSetup').ambiguous, true);
+
+    const onSheet = explainDiagnostic(graph, {
+      id: 'Sch_UndeclaredAttribute',
+      description: "The 'bogus' attribute is not declared.",
+      xpath: '/x:worksheet[1]/x:pageSetup[1]',
+    });
+    assert.equal(onSheet.legal.type, 'sml:CT_PageSetup');
+
+    const onChartsheet = explainDiagnostic(graph, {
+      id: 'Sch_UndeclaredAttribute',
+      description: "The 'bogus' attribute is not declared.",
+      xpath: '/x:chartsheet[1]/x:pageSetup[1]',
+    });
+    assert.equal(onChartsheet.legal.type, 'sml:CT_CsPageSetup');
+  });
+
+  test('an ambiguous owner the path cannot settle still reports every variant', () => {
+    const result = explainDiagnostic(graph, {
+      id: 'Sch_UndeclaredAttribute',
+      description: "The 'bogus' attribute is not declared.",
+      xpath: '/x:pageSetup[1]',
+    });
+    assert.equal(result.legal.ambiguous, true);
+    assert.ok(result.legal.variants.length > 1);
   });
 
   test('the allowlist is explicit, not a Sch_ prefix match', () => {
