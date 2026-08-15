@@ -10,7 +10,11 @@ runtime notices.
 
 ## Unreleased
 
-Everything so far. Nothing has been published yet.
+Nothing yet.
+
+## 0.0.1 — npm (`mcp-server-ooxml`)
+
+First published version. The skill (`ooxml-lookup`) is not released yet.
 
 - The ECMA-376 schema graph: 51 vendored XSDs (Transitional, Strict, and the
   OPC set, the last vendored ahead of use) ingested into a 2.2 MB SQLite
@@ -20,3 +24,18 @@ Everything so far. Nothing has been published yet.
 - `explain` resolves an `ooxml-validate` diagnostic into "here is what would
   have been legal at that position", reading four fields of the report and no
   more.
+
+### Fixed before first release
+
+- **A bare name matching several vocabularies no longer answers with one of
+  them.** `children`, `attributes`, `values` and `enum` picked the first match
+  and returned it unlabelled, so `enum ST_Direction` answered `norm|rev`
+  (dml-diagram) to a question that was as likely about wml's `ltr|rtl` or pml's
+  `horz|vert`, and `children CT_Shape` reported the one of six declarations
+  that has no children. They now return `ambiguous: true` with a `variants`
+  array, the same way `element` and `type` already did. Answers for *qualified*
+  names are unchanged — no local name collides with itself inside a single
+  vocabulary.
+- `enum` on a name with no simple type now returns `found: true` with
+  `enumerated: false` and a `reason`, rather than `found: false`. It found the
+  name; what it lacks is an enumeration.

@@ -2,7 +2,7 @@
   "name": "ooxml-ai-tooling",
   "version": "0.0.0",
   "private": true,
-  "description": "Skill and MCP server giving AI agents structured, offline access to the ECMA-376 schema graph",
+  "description": "MCP server and agent skill giving AI agents offline, structured access to the ECMA-376 (Office Open XML) schema",
   "type": "module",
   "author": "shbernal",
   "license": "MIT",

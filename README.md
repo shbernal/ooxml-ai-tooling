@@ -8,8 +8,9 @@ Two surfaces over one core:
 - **`ooxml-lookup`** — an agent skill: a CLI for any agent with a shell.
 - **`mcp-server-ooxml`** — an MCP server over stdio, for MCP clients.
 
-> **Status: pre-release.** Nothing is published yet and everything is subject to
-> change.
+> **Status: `0.0.x`.** `mcp-server-ooxml` is on npm; the skill is not released
+> yet. Neither surface is frozen — expect breaking changes without a
+> deprecation period until `0.1.0`.
 
 ## What it answers
 

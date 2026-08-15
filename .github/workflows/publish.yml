@@ -7,14 +7,31 @@ name: publish
 #
 # The split is deliberate. The npm package is the tag's content and nothing
 # else, while the skill listing carries a changelog that points at the release
-# page — which does not exist yet at tag-push time. `gh release create v0.1.0`
+# page — which does not exist yet at tag-push time. `gh release create v0.0.2`
 # after the tag push therefore runs the second half.
+#
+# Both halves are safe to run when only one applies: the npm job reads an
+# already-published version off the 403 rather than failing, and the skill job
+# skips when ClawHub is unconfigured or `skill/` has not changed.
+#
+# `workflow_dispatch` runs the gate and nothing else. Neither publish job fires
+# on it: a dispatch can name any ref, including a branch, so there is no tag to
+# check `mcp/package.json` against — and a publish path whose version guard does
+# not apply is worse than no manual path at all. To retry a failed upload, re-run
+# the tag's own workflow.
 on:
   push:
     tags: ['v*']
   release:
     types: [published]
   workflow_dispatch:
+
+# Uploads are not idempotent, so two runs on one ref must not overlap — and the
+# second must not be *cancelled* either, since it may be the release half of a
+# tag that already published to npm.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   # The gate that makes a release trustworthy. Both surfaces vendor the core and
@@ -26,7 +43,10 @@ jobs:
 
   publish-mcp:
     needs: verify
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Tag pushes only. The repository guard keeps a fork that inherits this file
+    # from trying to publish under our name — it would fail on OIDC, but failing
+    # loudly in someone else's Actions tab is not the behaviour we want.
+    if: github.event_name == 'push' && github.repository == 'shbernal/ooxml-ai-tooling'
     runs-on: ubuntu-latest
     permissions:
       # Trusted publishing (OIDC). No npm token lives in this repo, and npm
@@ -50,7 +70,6 @@ jobs:
       # else ties it to what gets uploaded: tagging v0.2.0 without bumping the
       # manifest would publish 0.1.0 under a v0.2.0 release.
       - name: Tag matches the manifest
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
           tag="${GITHUB_REF_NAME#v}"
           packaged=$(node -p "require('./mcp/package.json').version")
@@ -68,10 +87,20 @@ jobs:
       # still reports the previous version, and a guard built on it would
       # conclude "not published yet" and then hit the very error it was meant
       # to avoid.
+      # What actually goes up. The package is a directory of vendored copies
+      # selected by `files`, so the failure mode is a missing file rather than a
+      # broken one — and `npm publish` is a poor place to discover it.
+      - name: What the tarball contains
+        working-directory: mcp
+        run: npm pack --dry-run --ignore-scripts
+
+      # `--provenance` is explicit rather than left to npm's OIDC default, so a
+      # misconfigured trusted publisher fails here instead of quietly uploading
+      # an unattested tarball that looks fine until someone checks the npm page.
       - name: Publish to npm
         working-directory: mcp
         run: |
-          if out=$(npm publish 2>&1); then
+          if out=$(npm publish --provenance --ignore-scripts 2>&1); then
             echo "$out"
           elif grep -qiE 'previously published|EPUBLISHCONFLICT' <<<"$out"; then
             echo "$out"
@@ -83,14 +112,13 @@ jobs:
 
   publish-skill:
     needs: verify
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && github.repository == 'shbernal/ooxml-ai-tooling'
     runs-on: ubuntu-latest
-    # CLAWHUB_TOKEN is an environment secret, so without this it resolves to an
-    # empty string and `auth login` fails at release time. publish-mcp is
-    # deliberately not in the environment: it holds no secret, and npm's trusted
-    # publisher for this package is configured without one, which a job running
-    # in `release` would contradict in its OIDC claims.
-    environment: release
+    # No environment, here or in publish-mcp. CLAWHUB_TOKEN is a plain
+    # repository secret: an environment would buy an approval gate we do not
+    # want on a release that has already been cut, and npm's trusted publisher
+    # is configured without one, which a job running in an environment would
+    # contradict in its OIDC claims.
     permissions:
       contents: read
     env:
@@ -104,6 +132,22 @@ jobs:
           # Need tag history to diff skill/ against the previous release.
           fetch-depth: 0
 
+      # The skill is not released yet, so CLAWHUB_TOKEN does not exist and every
+      # step below would fail on a release cut for the npm package alone. Gating
+      # the diff step is enough to stop the rest: a skipped step's outputs are
+      # empty, so every `changed == 'true'` downstream is already false.
+      - name: Is ClawHub configured?
+        id: gate
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+        run: |
+          if [ -z "$CLAWHUB_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLAWHUB_TOKEN is not set; the skill half of this release is skipped"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # The two artifacts are independent and their versions are not required to
       # move together. A release that only touched mcp/'s server adapter should
       # not mint a skill version whose files are identical to the last one.
@@ -113,6 +157,7 @@ jobs:
       # the non-obvious consequence of vendoring a data artifact.
       - name: Check whether the skill changed since the last release
         id: diff
+        if: steps.gate.outputs.configured == 'true'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |

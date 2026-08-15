@@ -29,13 +29,18 @@ read as an arbitrary pin.
 
 ## Pre-release
 
-**No release yet.** Treat everything here as free to change:
+**`0.0.x`.** `mcp-server-ooxml` is on npm; the skill is not released yet.
+Publishing a version does not make its shape a commitment — treat everything
+here as free to change:
 
 - No backwards compatibility obligation, on any surface, in any direction.
 - No deprecation shims, no compatibility aliases, no "kept for the old callers".
 - Existing code, file layout and written plans are **context, not constraints**.
   When the better design is incompatible with what is here, ship the better
   design.
+
+The one thing a published version *does* fix is itself: never delete or
+re-publish `0.0.1`, fix forward with a bump.
 
 Delete this section when `v0.1.0` ships; from that point compatibility is a real
 constraint and breaking changes are evaluated, not assumed.
