@@ -53,6 +53,7 @@
     {
       "includes": [
         "build/**/*.mjs",
+        "core/*.test.mjs",
         "skill/scripts/*-cli.mjs",
         "mcp/smoke.mjs",
         ".github/scripts/**/*.mjs"

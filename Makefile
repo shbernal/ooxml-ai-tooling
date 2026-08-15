@@ -12,6 +12,7 @@ VENDOR_DIRS := skill/scripts mcp/src
 
 help:
 	@echo "db            build core/data/ooxml.db from schemas/"
+	@echo "dump          emit the canonical text serialisation of the database"
 	@echo "check-schemas verify the vendored XSDs against schemas/SHA256SUMS"
 	@echo "sync-core     copy the core modules and database into both surfaces"
 	@echo "check-vendor  verify the vendored copies match"
@@ -23,7 +24,12 @@ help:
 # rebuilt from the committed XSDs. The two *committed* copies live in the
 # surfaces (see sync-core), because each is distributed on its own.
 db:
-	node build/ingest.mjs
+	node build/build-db.mjs
+
+# The canonical text serialisation CI hashes. Its format is a contract — see the
+# header of build/dump.mjs before changing it.
+dump:
+	@node build/dump.mjs
 
 # The XSDs are the root of the trust chain: PROVENANCE.md pins the archives,
 # SHA256SUMS pins what came out of them. Catches a hand-edit and, more usefully,

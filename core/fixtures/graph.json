@@ -1,0 +1,397 @@
+{
+  "wml CT_PPr children": [
+    {
+      "local_name": "pStyle",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 0
+    },
+    {
+      "local_name": "keepNext",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 1
+    },
+    {
+      "local_name": "keepLines",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 2
+    },
+    {
+      "local_name": "pageBreakBefore",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 3
+    },
+    {
+      "local_name": "framePr",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 4
+    },
+    {
+      "local_name": "widowControl",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 5
+    },
+    {
+      "local_name": "numPr",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 6
+    },
+    {
+      "local_name": "suppressLineNumbers",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 7
+    },
+    {
+      "local_name": "pBdr",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 8
+    },
+    {
+      "local_name": "shd",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 9
+    },
+    {
+      "local_name": "tabs",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 10
+    },
+    {
+      "local_name": "suppressAutoHyphens",
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 11
+    }
+  ],
+  "wml CT_PPr inheritance": [
+    {
+      "relation": "extension",
+      "content_model": "complexContent",
+      "base_type_ref": "wml:CT_PPrBase"
+    }
+  ],
+  "wml group refs with unbounded ref sites": [
+    {
+      "parent": "CT_Arc",
+      "grp": "EG_ShapeElements",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_BackgroundFillStyleList",
+      "grp": "EG_FillProperties",
+      "min_occurs": 3,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_BdoContentRun",
+      "grp": "EG_PContent",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Body",
+      "grp": "EG_BlockLevelElts",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_ColorMRU",
+      "grp": "EG_ColorChoice",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Colors",
+      "grp": "EG_ColorChoice",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Comment",
+      "grp": "EG_BlockLevelElts",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Curve",
+      "grp": "EG_ShapeElements",
+      "min_occurs": 0,
+      "max_occurs": -1
+    }
+  ],
+  "sml ST_TextRotation union": [
+    {
+      "order_index": 0,
+      "member_kind": "union",
+      "member_type_ref": "sml:ST_TextRotation#1",
+      "base_type_ref": "xsd:nonNegativeInteger",
+      "facets": "maxInclusive=180",
+      "values_": null
+    },
+    {
+      "order_index": 1,
+      "member_kind": "union",
+      "member_type_ref": "sml:ST_TextRotation#2",
+      "base_type_ref": "xsd:nonNegativeInteger",
+      "facets": null,
+      "values_": "255"
+    }
+  ],
+  "sml ST_Orientation values": [
+    {
+      "value": "default",
+      "order_index": 0
+    },
+    {
+      "value": "portrait",
+      "order_index": 1
+    },
+    {
+      "value": "landscape",
+      "order_index": 2
+    }
+  ],
+  "ST_Percentage is two different types": {
+    "shared-commonSimpleTypes (facets)": [
+      {
+        "facet": "pattern",
+        "value": "-?[0-9]+(\\.[0-9]+)?%"
+      }
+    ],
+    "dml-main (union)": [
+      {
+        "member_kind": "union",
+        "member_type_ref": "dml-main:ST_PercentageDecimal",
+        "order_index": 0
+      },
+      {
+        "member_kind": "union",
+        "member_type_ref": "shared-commonSimpleTypes:ST_Percentage",
+        "order_index": 1
+      }
+    ]
+  },
+  "wildcards": [
+    {
+      "parent": "CT_Background",
+      "wildcard_namespace": "urn:schemas-microsoft-com:vml",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Background",
+      "wildcard_namespace": "urn:schemas-microsoft-com:office:office",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_DataBinding",
+      "wildcard_namespace": "##any",
+      "wildcard_process_contents": "strict",
+      "min_occurs": 1,
+      "max_occurs": 1
+    },
+    {
+      "parent": "CT_EquationXml",
+      "wildcard_namespace": "##any",
+      "wildcard_process_contents": "strict",
+      "min_occurs": 1,
+      "max_occurs": 1
+    },
+    {
+      "parent": "CT_Extension",
+      "wildcard_namespace": "##any",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 1,
+      "max_occurs": 1
+    },
+    {
+      "parent": "CT_Extension",
+      "wildcard_namespace": "##any",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Extension",
+      "wildcard_namespace": "##any",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 1,
+      "max_occurs": 1
+    },
+    {
+      "parent": "CT_GraphicalObjectData",
+      "wildcard_namespace": "##any",
+      "wildcard_process_contents": "strict",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Object",
+      "wildcard_namespace": "urn:schemas-microsoft-com:vml",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Object",
+      "wildcard_namespace": "urn:schemas-microsoft-com:office:office",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_OfficeArtExtension",
+      "wildcard_namespace": "##any",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Picture",
+      "wildcard_namespace": "urn:schemas-microsoft-com:vml",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Picture",
+      "wildcard_namespace": "urn:schemas-microsoft-com:office:office",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Schema",
+      "wildcard_namespace": "##any",
+      "wildcard_process_contents": "strict",
+      "min_occurs": 1,
+      "max_occurs": 1
+    },
+    {
+      "parent": "CT_ShapeDefaults",
+      "wildcard_namespace": "urn:schemas-microsoft-com:office:office",
+      "wildcard_process_contents": "lax",
+      "min_occurs": 0,
+      "max_occurs": -1
+    },
+    {
+      "parent": "CT_Textbox",
+      "wildcard_namespace": "##local",
+      "wildcard_process_contents": "skip",
+      "min_occurs": 1,
+      "max_occurs": 1
+    }
+  ],
+  "dml CT_SolidColorFillProperties content": {
+    "direct_children": [],
+    "group_refs": [
+      {
+        "local_name": "EG_ColorChoice",
+        "min_occurs": 0,
+        "max_occurs": 1
+      }
+    ]
+  },
+  "dml CT_Point2D attributes": [
+    {
+      "local_name": "x",
+      "attr_use": "required",
+      "is_qualified": 0,
+      "type_ref": "dml-main:ST_Coordinate"
+    },
+    {
+      "local_name": "y",
+      "attr_use": "required",
+      "is_qualified": 0,
+      "type_ref": "dml-main:ST_Coordinate"
+    }
+  ],
+  "wml CT_Object compositor tree": [
+    {
+      "kind": "sequence",
+      "depth": 0,
+      "min_occurs": 1,
+      "max_occurs": 1,
+      "order_index": 0
+    },
+    {
+      "kind": "sequence",
+      "depth": 1,
+      "min_occurs": 1,
+      "max_occurs": -1,
+      "order_index": 0
+    },
+    {
+      "kind": "choice",
+      "depth": 1,
+      "min_occurs": 0,
+      "max_occurs": 1,
+      "order_index": 2
+    }
+  ],
+  "ST_OnOff differs by profile": {
+    "transitional": [
+      {
+        "member_type_ref": "xsd:boolean",
+        "order_index": 0
+      },
+      {
+        "member_type_ref": "shared-commonSimpleTypes:ST_OnOff1",
+        "order_index": 1
+      }
+    ],
+    "strict": [
+      {
+        "member_type_ref": "xsd:boolean",
+        "order_index": 0
+      }
+    ]
+  },
+  "vml is transitional-only": {
+    "in_transitional": 298,
+    "in_strict": 0
+  },
+  "wml namespaces by profile": [
+    {
+      "profile": "transitional",
+      "uri": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      "preferred_prefix": "w"
+    },
+    {
+      "profile": "strict",
+      "uri": "http://purl.oclc.org/ooxml/wordprocessingml/main",
+      "preferred_prefix": "w"
+    }
+  ],
+  "local w:p declarations": {
+    "declarations": 3,
+    "owners": 3,
+    "distinct_types": 3
+  },
+  "row counts": {
+    "symbols": 5606,
+    "anonymous": 2,
+    "compositors": 2011,
+    "child_edges": 6620,
+    "group_edges": 510,
+    "attr_edges": 6199,
+    "inheritance_edges": 1117,
+    "enums": 6273,
+    "simple_type_facets": 246,
+    "union_members": 238
+  }
+}

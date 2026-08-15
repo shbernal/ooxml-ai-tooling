@@ -23,7 +23,9 @@
     "lint:fix": "biome check --write --error-on-warnings",
     "format": "biome format --write",
     "test": "node --test 'core/*.test.mjs'",
-    "verify": "pnpm run lint && pnpm run test"
+    "check-schemas": "node build/check-schemas.mjs",
+    "build:db": "node build/build-db.mjs",
+    "verify": "pnpm run lint && pnpm run check-schemas && pnpm run test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",
