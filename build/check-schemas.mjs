@@ -22,10 +22,18 @@ import {fileURLToPath} from 'node:url';
 const SCHEMAS = join(dirname(fileURLToPath(import.meta.url)), '..', 'schemas');
 const MANIFEST = join(SCHEMAS, 'SHA256SUMS');
 
-/** Parse the `<hex>  <path>` lines of a sha256sum manifest. */
+/**
+ * Parse the `<hex>  <path>` lines of a sha256sum manifest.
+ *
+ * Split on `\r?\n`, not `\n`. The manifest is an ordinary text file — only
+ * `*.xsd` is marked `-text` in .gitattributes, because only the XSDs' bytes are
+ * a provenance claim — so a Windows checkout hands us CRLF here quite legally.
+ * Splitting on `\n` alone leaves a `\r` that the `$` anchor rejects, failing
+ * every line of a manifest that is perfectly intact.
+ */
 function parseManifest(text) {
   const entries = new Map();
-  for (const line of text.split('\n')) {
+  for (const line of text.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const match = /^([0-9a-f]{64}) {2}(.+)$/.exec(line);
     if (!match) throw new Error(`SHA256SUMS: unparseable line: ${line}`);
