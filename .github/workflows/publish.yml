@@ -12,7 +12,8 @@ name: publish
 #
 # Both halves are safe to run when only one applies: the npm job reads an
 # already-published version off the 403 rather than failing, and the skill job
-# skips when ClawHub is unconfigured or `skill/` has not changed.
+# skips when `skill/` has not changed since the previous tag or when the version
+# is already on ClawHub.
 #
 # `workflow_dispatch` runs the gate and nothing else. Neither publish job fires
 # on it: a dispatch can name any ref, including a branch, so there is no tag to
@@ -114,11 +115,14 @@ jobs:
     needs: verify
     if: github.event_name == 'release' && github.repository == 'shbernal/ooxml-ai-tooling'
     runs-on: ubuntu-latest
-    # No environment, here or in publish-mcp. CLAWHUB_TOKEN is a plain
-    # repository secret: an environment would buy an approval gate we do not
-    # want on a release that has already been cut, and npm's trusted publisher
-    # is configured without one, which a job running in an environment would
-    # contradict in its OIDC claims.
+    # CLAWHUB_TOKEN is an environment secret, so without this it resolves to an
+    # empty string and `auth login` fails at release time. publish-mcp is
+    # deliberately not in the environment: it holds no secret, and npm's trusted
+    # publisher for this package is configured without one, which a job running
+    # in `release` would contradict in its OIDC claims. The environment carries
+    # no protection rules — it is a secret scope, not an approval gate on a
+    # release that has already been cut.
+    environment: release
     permissions:
       contents: read
     env:
@@ -132,22 +136,6 @@ jobs:
           # Need tag history to diff skill/ against the previous release.
           fetch-depth: 0
 
-      # The skill is not released yet, so CLAWHUB_TOKEN does not exist and every
-      # step below would fail on a release cut for the npm package alone. Gating
-      # the diff step is enough to stop the rest: a skipped step's outputs are
-      # empty, so every `changed == 'true'` downstream is already false.
-      - name: Is ClawHub configured?
-        id: gate
-        env:
-          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
-        run: |
-          if [ -z "$CLAWHUB_TOKEN" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::CLAWHUB_TOKEN is not set; the skill half of this release is skipped"
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          fi
-
       # The two artifacts are independent and their versions are not required to
       # move together. A release that only touched mcp/'s server adapter should
       # not mint a skill version whose files are identical to the last one.
@@ -157,7 +145,6 @@ jobs:
       # the non-obvious consequence of vendoring a data artifact.
       - name: Check whether the skill changed since the last release
         id: diff
-        if: steps.gate.outputs.configured == 'true'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
