@@ -1,0 +1,32 @@
+{
+  "name": "ooxml-ai-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Skill and MCP server giving AI agents structured, offline access to the ECMA-376 schema graph",
+  "type": "module",
+  "author": "shbernal",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shbernal/ooxml-ai-tooling.git"
+  },
+  "homepage": "https://github.com/shbernal/ooxml-ai-tooling#readme",
+  "bugs": {
+    "url": "https://github.com/shbernal/ooxml-ai-tooling/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "lint": "biome check --error-on-warnings",
+    "lint:fix": "biome check --write --error-on-warnings",
+    "format": "biome format --write",
+    "test": "node --test 'core/*.test.mjs'",
+    "verify": "pnpm run lint && pnpm run test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.8",
+    "lefthook": "^2.1.10"
+  }
+}

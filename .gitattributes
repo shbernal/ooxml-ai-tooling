@@ -1,0 +1,13 @@
+# The built database is binary. Never diff it, never line-ending-mangle it.
+*.db binary
+
+# The vendored ECMA-376 XSDs are stored **verbatim** — their bytes are the
+# provenance claim in schemas/PROVENANCE.md, and a checksum that only matches
+# after git rewrote the file is not a checksum. `-text` disables all
+# normalisation, which matters most on Windows checkouts where the default would
+# convert LF to CRLF and invalidate every recorded hash.
+schemas/**/*.xsd -text
+
+# Collapse the schemas in GitHub diffs and exclude them from language stats.
+# They are build input we did not write, not source we maintain.
+schemas/** linguist-generated=true

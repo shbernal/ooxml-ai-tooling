@@ -1,0 +1,9 @@
+# ripgrep (and every tool honouring .ignore) skips this by default.
+#
+# schemas/ is ~940 KB of vendored ECMA-376 XSD that is *build input*, not source.
+# An agent grepping this repo for an element name would otherwise land in the raw
+# XSD, read a multi-hundred-KB file, and answer worse than the tools do — the
+# built database exists precisely so that question has a cheap structured answer.
+#
+# `rg --no-ignore` still reaches it when you genuinely want the source.
+schemas/

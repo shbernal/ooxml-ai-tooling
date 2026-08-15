@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# A stray npm lockfile would shadow pnpm-lock.yaml; keep it out of history.
+package-lock.json
+
+# Build output of the ingest. `core/data/ooxml.db` is rebuilt from schemas/ by
+# `make db` and by CI on every run, so committing it would only add churn — the
+# two copies that *are* committed live in skill/scripts/data/ and mcp/src/data/,
+# because each surface is distributed on its own and must be self-contained.
+core/data/ooxml.db
+
+# Editors
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# THE scratch directory: throwaway probes, dumps, downloaded archives. Anything
+# here is regenerable and never committed. .gitkeep is tracked so a fresh clone
+# can write here immediately. (Contents, not the directory: git cannot re-include
+# a file whose parent directory is itself excluded.)
+.tmp/*
+!.tmp/.gitkeep
