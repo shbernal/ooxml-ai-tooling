@@ -132,32 +132,8 @@ jobs:
       SKILL_REF: '@shbernal/ooxml-lookup'
     steps:
       - uses: actions/checkout@v7
-        with:
-          # Need tag history to diff skill/ against the previous release.
-          fetch-depth: 0
-
-      # The two artifacts are independent and their versions are not required to
-      # move together. A release that only touched mcp/'s server adapter should
-      # not mint a skill version whose files are identical to the last one.
-      #
-      # Note this diff covers `skill/scripts/data/ooxml.db` too, so a
-      # schema-graph rebuild counts as a skill change — which is correct, and is
-      # the non-obvious consequence of vendoring a data artifact.
-      - name: Check whether the skill changed since the last release
-        id: diff
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          prev_tag=$(git tag --sort=-creatordate | grep -vFx "$RELEASE_TAG" | head -1)
-          if [ -z "$prev_tag" ] || ! git diff --quiet "$prev_tag" HEAD -- skill/; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::skill/ is unchanged since $prev_tag; skipping ClawHub"
-          fi
 
       - uses: actions/setup-node@v7
-        if: steps.diff.outputs.changed == 'true'
         with:
           node-version: '24'
 
@@ -171,59 +147,54 @@ jobs:
       # complete` below exists: a pin protects against the bug we know about,
       # and that step protects against the next one.
       - name: Install clawhub
-        if: steps.diff.outputs.changed == 'true'
         run: npm install -g clawhub@0.23.3
 
       - name: Authenticate to ClawHub
-        if: steps.diff.outputs.changed == 'true'
         run: clawhub auth login --token "${{ secrets.CLAWHUB_TOKEN }}" --no-browser
+
+      # Does the registry already have exactly this skill?
+      #
+      # This used to be `git diff <prev tag> HEAD -- skill/`, which asks whether
+      # the *tree* changed and infers the registry from it. That inference is
+      # wrong in all three ways it can be: it cannot mint a first version, it
+      # skips when a previous release failed to publish, and it skips when a
+      # previous release published the wrong bytes — which is how 0.0.4 went out
+      # with the broken 0.0.3 skill still the latest. Ask the registry directly
+      # and every one of those becomes "the content differs, so publish".
+      #
+      # Containment, not equality: the registry adds a generated `skill-card.md`
+      # that was never in `skill/`. See build/skill-manifest.mjs.
+      - name: Check whether the registry already has this skill
+        id: state
+        run: |
+          clawhub inspect "$SKILL_REF" --tag latest --files --json > /tmp/latest.json 2>/dev/null || true
+          if node build/skill-manifest.mjs --verify /tmp/latest.json >/dev/null 2>&1; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::the published skill already matches skill/; skipping ClawHub"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # ClawHub refuses to re-publish an existing version and exits non-zero, so
       # without this the whole workflow fails whenever the version is already up
       # — a re-run of a release, or a skill published by hand before the tag.
       # `inspect` exits 0 when the version exists and 1 when it does not.
+      #
+      # Reaching here with `changed=true` means the tag's version exists *and*
+      # differs from the tree, which a bump has to resolve because a published
+      # version is permanent. Say so rather than skipping quietly.
       - name: Check whether this version is already published
         id: existing
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.state.outputs.changed == 'true'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
           if clawhub inspect "$SKILL_REF" --version "$version" >/dev/null 2>&1; then
             echo "published=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::$SKILL_REF@$version is already published; skipping"
+            echo "::warning::$SKILL_REF@$version exists but differs from skill/; a published version cannot be replaced, so fix forward with a bump"
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # A publish that drops files still exits 0, so "it published" is not
-      # evidence that it published the skill. Count what is on disk, ask the CLI
-      # what it would upload, and refuse to proceed if those disagree.
-      #
-      # This is the same failure shape as the ClawHub gate removed in the commit
-      # that added `environment: release`: a green workflow that shipped nothing
-      # usable. The `.db` is 96% of the artifact and the only part with no
-      # plausible reason to be text-filtered, so it is exactly the file a
-      # future CLI change is most likely to drop again.
-      - name: Verify the upload is complete
-        if: steps.diff.outputs.changed == 'true' && steps.existing.outputs.published == 'false'
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          on_disk=$(find skill -type f | wc -l)
-          would_send=$(clawhub skill publish skill \
-            --slug "$SKILL_SLUG" \
-            --version "${RELEASE_TAG#v}" \
-            --name "OOXML Lookup" \
-            --dry-run --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).fileCount")
-          echo "on disk: $on_disk, would upload: $would_send"
-          if [ "$on_disk" != "$would_send" ]; then
-            echo "::error::clawhub would upload $would_send of $on_disk files in skill/ — refusing to publish an incomplete skill"
-            exit 1
-          fi
-          if [ ! -s skill/scripts/data/ooxml.db ]; then
-            echo "::error::skill/scripts/data/ooxml.db is missing or empty"
-            exit 1
           fi
 
       # The slug is passed explicitly because ClawHub otherwise defaults it to
@@ -231,7 +202,7 @@ jobs:
       # passed for the same reason: left out, the listing invents its own
       # summary.
       - name: Publish skill to ClawHub
-        if: steps.diff.outputs.changed == 'true' && steps.existing.outputs.published == 'false'
+        if: steps.state.outputs.changed == 'true' && steps.existing.outputs.published == 'false'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
@@ -244,3 +215,32 @@ jobs:
             --source-ref "$RELEASE_TAG" \
             --source-path skill \
             --changelog "${{ github.event.release.html_url }}"
+
+      # `publish` exiting 0 says the request succeeded, not that the artifact is
+      # whole. 0.0.3 exited 0 having silently dropped the 2.2 MB database, and
+      # nothing downstream noticed until someone tried to query the skill.
+      #
+      # So read it back. This is the only check that tests the thing users
+      # actually get, and it is worth failing an otherwise-green release over: a
+      # broken version cannot be withdrawn, so the alarm has to be loud enough
+      # that the next release is a fix and not a surprise.
+      #
+      # The retry is for moderation, which takes a minute or two before the
+      # version is fetchable. A version that never appears is a failure, not a
+      # pass — hence the explicit exit.
+      - name: Verify what the registry actually stored
+        if: steps.state.outputs.changed == 'true' && steps.existing.outputs.published == 'false'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          for attempt in $(seq 1 12); do
+            if clawhub inspect "$SKILL_REF" --version "$version" --files --json > /tmp/published.json 2>/dev/null; then
+              node build/skill-manifest.mjs --verify /tmp/published.json
+              exit $?
+            fi
+            echo "attempt $attempt: $version is not fetchable yet; waiting for moderation"
+            sleep 20
+          done
+          echo "::error::$SKILL_REF@$version never became fetchable; cannot confirm what was stored"
+          exit 1

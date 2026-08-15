@@ -28,15 +28,28 @@ first broken one.
 A published version is permanent, so `0.0.3` stays on the registry as a version
 that should not be installed rather than being deleted.
 
-Two changes so the class of failure cannot recur:
+Three changes so the class of failure cannot recur. None ships in an artifact.
 
 - The pin moves to `clawhub@0.23.3`, with the floor written down.
-- A **`Verify the upload is complete`** step counts the files in `skill/`, asks
-  the CLI what it would upload, and fails the release when those disagree. The
-  pin handles the bug we know about; this handles the next one. It is the same
-  failure shape as the "is ClawHub configured?" gate removed one release ago — a
-  green workflow that shipped nothing usable — and it is worth being blunt that
-  removing that gate is what made this one visible at all.
+- **The publish is read back.** `Verify what the registry actually stored`
+  re-fetches the version and compares every file's sha256 against `skill/`
+  (`build/skill-manifest.mjs`), failing the release when they disagree. It is
+  the only check that tests what a user actually installs, and the one that
+  would have caught `0.0.3` before anyone else did.
+- **The "does the skill need publishing?" gate asks the registry now**, instead
+  of `git diff <prev tag> HEAD -- skill/`. Inferring the registry's state from
+  the tree is wrong in all three ways it can be: it cannot mint a first version
+  (which is why `0.0.2` went out by hand), it skips when a previous release
+  failed to publish, and it skips when a previous release published the *wrong
+  bytes*. The last one is not hypothetical — the `v0.0.4` release skipped the
+  skill entirely, because `skill/` had not changed since `v0.0.3` and the gate
+  read that as "the registry is current" while the registry held a skill with no
+  database. So `0.0.4` was published by hand too; from `0.0.5` the workflow can
+  do it.
+
+It is worth being blunt that removing the "is ClawHub configured?" gate one
+release ago is what made any of this visible. Both were the same shape: a green
+workflow that had shipped nothing usable.
 
 ## 0.0.3 — both surfaces
 
