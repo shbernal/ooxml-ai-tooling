@@ -511,6 +511,7 @@ function writeDefinition(stmt, schema, resolver, profileId, definition, ids) {
 }
 
 /** Compositors, element children, wildcards and group refs, in document order. */
+/** @param {number | null} compositorId the enclosing compositor, null at a definition's top level */
 function writeParticles(context, body, compositorId = null, depth = 0) {
   const {stmt, schema, resolver, profileId, ownerId} = context;
   let order = 0;

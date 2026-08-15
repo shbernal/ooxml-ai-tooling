@@ -91,6 +91,9 @@ function parseDocument(path) {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // the OPC set is BOM'd
   const doc = parseXml(text);
   const root = doc.root;
+  // A document with no root element parses fine and yields null. Every caller
+  // below dereferences this, so check once here rather than in five places.
+  if (root === null) throw new Error(`${path}: no root element`);
   if (localName(root.name) !== 'schema') {
     throw new Error(`${path}: root element is ${root.name}, expected xsd:schema`);
   }

@@ -47,6 +47,7 @@ export function dumpDatabase(dbPath) {
   out.push('# pragmas');
   for (const pragma of ['application_id', 'user_version', 'page_size', 'encoding']) {
     const row = db.prepare(`PRAGMA ${pragma}`).get();
+    if (row === undefined) throw new Error(`PRAGMA ${pragma} returned nothing`);
     out.push(`${pragma}\t${encode(Object.values(row)[0])}`);
   }
 
@@ -80,13 +81,13 @@ export function dumpDatabase(dbPath) {
     const columns = db
       .prepare(`PRAGMA table_info(${table})`)
       .all()
-      .map((c) => c.name);
+      .map((c) => String(c.name));
     const list = columns.map((c) => `"${c}"`).join(', ');
     out.push(`# table ${table}`);
     out.push(columns.join('\t'));
     const rows = db.prepare(`SELECT ${list} FROM "${table}" ORDER BY ${list}`).all();
     for (const row of rows) {
-      out.push(columns.map((c) => encode(row[c])).join('\t'));
+      out.push(columns.map((c) => encode(row[String(c)])).join('\t'));
     }
     out.push(`# rows ${rows.length}`);
   }
@@ -100,7 +101,7 @@ export function dumpDatabase(dbPath) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   // `make dump | head` closes the pipe early. That is normal use of a tool that
   // writes 40k lines to stdout, not an error worth a stack trace.
-  process.stdout.on('error', (error) => {
+  process.stdout.on('error', (/** @type {NodeJS.ErrnoException} */ error) => {
     if (error.code !== 'EPIPE') throw error;
   });
   process.stdout.write(dumpDatabase(process.argv[2] ?? 'core/data/ooxml.db'));
