@@ -16,7 +16,7 @@
  */
 import {createHash} from 'node:crypto';
 import {readdir, readFile} from 'node:fs/promises';
-import {dirname, join, relative} from 'node:path';
+import {dirname, join, relative, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const SCHEMAS = join(dirname(fileURLToPath(import.meta.url)), '..', 'schemas');
@@ -46,7 +46,11 @@ async function findXsd(dir) {
   const found = [];
   for (const entry of await readdir(dir, {withFileTypes: true, recursive: true})) {
     if (entry.isFile() && entry.name.endsWith('.xsd')) {
-      found.push(relative(SCHEMAS, join(entry.parentPath, entry.name)));
+      // Manifest keys are `sha256sum`-format and therefore always '/'-separated.
+      // `relative()` hands back '\' on Windows, which would make every path a
+      // mismatch — reported as 51 UNLISTED plus 51 MISSING, which reads like
+      // catastrophic corruption rather than a separator.
+      found.push(relative(SCHEMAS, join(entry.parentPath, entry.name)).replaceAll(sep, '/'));
     }
   }
   return found.sort();
