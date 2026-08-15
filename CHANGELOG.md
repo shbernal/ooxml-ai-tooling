@@ -12,6 +12,32 @@ runtime notices.
 
 Nothing yet.
 
+## 0.0.4 — both surfaces
+
+**The `0.0.3` skill on ClawHub is broken. Use `0.0.4`.** Same content otherwise;
+`0.0.3` on npm is fine and `0.0.4` adds nothing to it but a version number.
+
+`clawhub@0.23.1`, which the release workflow pinned, silently omits
+`scripts/data/ooxml.db` from the upload — seven files instead of eight, exit 0,
+no warning. The database *is* the skill, so what shipped could not answer a
+single query. It went unnoticed because the hand-published `0.0.2` used
+`0.23.3`, which uploads all eight; the version that regressed was the one CI had
+been pinned to all along, so the first automated skill release was also the
+first broken one.
+
+A published version is permanent, so `0.0.3` stays on the registry as a version
+that should not be installed rather than being deleted.
+
+Two changes so the class of failure cannot recur:
+
+- The pin moves to `clawhub@0.23.3`, with the floor written down.
+- A **`Verify the upload is complete`** step counts the files in `skill/`, asks
+  the CLI what it would upload, and fails the release when those disagree. The
+  pin handles the bug we know about; this handles the next one. It is the same
+  failure shape as the "is ClawHub configured?" gate removed one release ago — a
+  green workflow that shipped nothing usable — and it is worth being blunt that
+  removing that gate is what made this one visible at all.
+
 ## 0.0.3 — both surfaces
 
 A database rebuild, so both artifacts ship it even though the reason is one

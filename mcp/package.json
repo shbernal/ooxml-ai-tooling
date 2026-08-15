@@ -1,6 +1,6 @@
 {
   "name": "mcp-server-ooxml",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "MCP server and agent skill giving AI agents offline, structured access to the ECMA-376 (Office Open XML) schema",
   "type": "module",
   "author": "shbernal",

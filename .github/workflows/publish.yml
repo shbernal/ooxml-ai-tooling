@@ -163,9 +163,16 @@ jobs:
 
       # Pinned; ClawHub has no OIDC trusted-publishing path, so auth is a
       # long-lived token (CLAWHUB_TOKEN) rather than id-token: write.
+      #
+      # **Not below 0.23.3.** 0.23.1 silently omits `scripts/data/ooxml.db` from
+      # the upload — 7 files instead of 8, exit 0, no warning — which shipped a
+      # 0.0.3 skill that cannot answer a single query, because the database *is*
+      # the skill. The version floor is the reason `Verify the upload is
+      # complete` below exists: a pin protects against the bug we know about,
+      # and that step protects against the next one.
       - name: Install clawhub
         if: steps.diff.outputs.changed == 'true'
-        run: npm install -g clawhub@0.23.1
+        run: npm install -g clawhub@0.23.3
 
       - name: Authenticate to ClawHub
         if: steps.diff.outputs.changed == 'true'
@@ -187,6 +194,36 @@ jobs:
             echo "::notice::$SKILL_REF@$version is already published; skipping"
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A publish that drops files still exits 0, so "it published" is not
+      # evidence that it published the skill. Count what is on disk, ask the CLI
+      # what it would upload, and refuse to proceed if those disagree.
+      #
+      # This is the same failure shape as the ClawHub gate removed in the commit
+      # that added `environment: release`: a green workflow that shipped nothing
+      # usable. The `.db` is 96% of the artifact and the only part with no
+      # plausible reason to be text-filtered, so it is exactly the file a
+      # future CLI change is most likely to drop again.
+      - name: Verify the upload is complete
+        if: steps.diff.outputs.changed == 'true' && steps.existing.outputs.published == 'false'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          on_disk=$(find skill -type f | wc -l)
+          would_send=$(clawhub skill publish skill \
+            --slug "$SKILL_SLUG" \
+            --version "${RELEASE_TAG#v}" \
+            --name "OOXML Lookup" \
+            --dry-run --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).fileCount")
+          echo "on disk: $on_disk, would upload: $would_send"
+          if [ "$on_disk" != "$would_send" ]; then
+            echo "::error::clawhub would upload $would_send of $on_disk files in skill/ — refusing to publish an incomplete skill"
+            exit 1
+          fi
+          if [ ! -s skill/scripts/data/ooxml.db ]; then
+            echo "::error::skill/scripts/data/ooxml.db is missing or empty"
+            exit 1
           fi
 
       # The slug is passed explicitly because ClawHub otherwise defaults it to
