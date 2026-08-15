@@ -1,3 +1,14 @@
+# LF in the working tree on every platform, Windows included.
+#
+# .editorconfig already says `end_of_line = lf`, but that governs editors, not
+# `git checkout` — so without this a Windows clone gets CRLF and Biome, whose
+# formatter emits LF, reports every source file as needing reformatting. The
+# repo then fails its own lint gate on a machine where nothing is wrong.
+#
+# This is the *first* rule so the two exceptions below can override it: later
+# rules win, and both the database and the vendored XSDs must stay untouched.
+* text=auto eol=lf
+
 # The built database is binary. Never diff it, never line-ending-mangle it.
 *.db binary
 

@@ -60,17 +60,29 @@ jobs:
       - name: Drive the MCP server over stdio
         run: make smoke
 
-  # Not optional, and not about coverage.
+  # Not optional, and not about coverage. It earned its place on the first run
+  # against a real repository, failing three times for three different reasons —
+  # none of which was the one this job was written to catch.
   #
-  # Three of this project's assumptions break on Windows and nowhere else: the
-  # vendored XSDs are CRLF and must not be rewritten at checkout (guarded by
-  # `-text` in .gitattributes), nothing may split raw XSD source on '\n', and
-  # build/dump.mjs must write '\n' explicitly rather than taking the platform
-  # default — otherwise its hash differs here for a reason that has nothing to
-  # do with the graph.
+  # What it was written for: the vendored XSDs are CRLF and must not be
+  # rewritten at checkout (guarded by `-text` in .gitattributes), nothing may
+  # split raw XSD source on '\n', and build/dump.mjs must write '\n' explicitly
+  # rather than taking the platform default. The dump gate covers those.
   #
-  # The dump gate catches all three. Cheapest possible matrix: everything on
-  # Linux, verify plus the rebuild here.
+  # What it actually found, all in the layer *around* the schemas rather than in
+  # them:
+  #
+  #   1. schemas/SHA256SUMS is an ordinary text file, so it arrives CRLF here.
+  #      Its parser split on '\n' and rejected all 51 lines.
+  #   2. Manifest keys are '/'-separated; `path.relative` returns '\' here, so
+  #      every path mismatched twice over — 51 UNLISTED plus 51 MISSING.
+  #   3. Without `* text=auto eol=lf`, the whole tree checks out CRLF and Biome,
+  #      which emits LF, reports every source file as unformatted. The repo
+  #      failed its own lint gate on a machine where nothing was wrong.
+  #
+  # The pattern in all three: the schemas were fine, and the tooling that reads
+  # and guards them was not. Cheapest possible matrix: everything on Linux,
+  # verify plus the rebuild here.
   windows:
     runs-on: windows-latest
     defaults:
