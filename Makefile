@@ -8,10 +8,11 @@ CORE_FILES :=
 
 VENDOR_DIRS := skill/scripts mcp/src
 
-.PHONY: db sync-core check-vendor test verify smoke help
+.PHONY: db check-schemas sync-core check-vendor test verify smoke help
 
 help:
 	@echo "db            build core/data/ooxml.db from schemas/"
+	@echo "check-schemas verify the vendored XSDs against schemas/SHA256SUMS"
 	@echo "sync-core     copy the core modules and database into both surfaces"
 	@echo "check-vendor  verify the vendored copies match"
 	@echo "test          run the core suite"
@@ -23,6 +24,13 @@ help:
 # surfaces (see sync-core), because each is distributed on its own.
 db:
 	node build/ingest.mjs
+
+# The XSDs are the root of the trust chain: PROVENANCE.md pins the archives,
+# SHA256SUMS pins what came out of them. Catches a hand-edit and, more usefully,
+# a line-ending rewrite — which happens at checkout rather than at edit time and
+# would otherwise surface as an unexplained ingest diff much later.
+check-schemas:
+	node build/check-schemas.mjs
 
 sync-core:
 	@for dir in $(VENDOR_DIRS); do \
