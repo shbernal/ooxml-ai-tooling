@@ -12,6 +12,23 @@ runtime notices.
 
 Nothing yet.
 
+## 0.0.2 — npm (`mcp-server-ooxml`)
+
+The code is **identical to `0.0.1`**. This release exists to exercise the
+automated path end to end, which `0.0.1` could not: npm trusted publishing is
+configured on a package's own settings page, so the package has to exist on the
+registry before there is anything to point at. `0.0.1` was therefore uploaded by
+hand and `0.0.2` is the first to go through `.github/workflows/publish.yml`.
+
+The one user-visible difference falls out of that: this version carries a
+**provenance attestation** linking the tarball to the commit and workflow that
+built it. `0.0.1` has none, and cannot be given one — provenance needs OIDC from
+CI, and a published version is never re-uploaded.
+
+From here every release goes through the workflow. A second manual `npm publish`
+would mean the automation is broken and should be fixed rather than worked
+around.
+
 ## 0.0.1 — npm (`mcp-server-ooxml`)
 
 First published version. The skill (`ooxml-lookup`) is not released yet.
