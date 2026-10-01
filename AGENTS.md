@@ -144,6 +144,32 @@ The XSDs are stored byte-for-byte as extracted, and `.gitattributes` marks them
 claim in `schemas/PROVENANCE.md`; a checksum that only matches after git rewrote
 the file is not a checksum.
 
+## The graph ships as SQLite, not JSON
+
+"Ship JSON, it is simpler" is the obvious simplification. It is a decision made
+against that, so argue with this section before changing the format.
+
+**The format is what enforces the cost model.** `SKILL.md` guidance is advisory,
+and an agent does the cheap obvious thing. With JSON the cheap thing works, badly
+and silently: `rg` on pretty-printed JSON returns a matching line without its
+record, so the next move is reading a multi-MB file, and on minified JSON a
+single hit puts the whole graph in context. A binary `.db` has no cheap wrong
+path. `rg` says `binary file matches` and stops, `Read` refuses it, and the only
+way in is the query layer.
+
+Supporting reasons:
+
+- JSONL per table survives grep but loses joins: "what can go inside `w:tblPr`"
+  becomes a hand-join across four files.
+- The CLI is a process per invocation and is used in a loop. JSON parses the
+  whole graph on every call; SQLite reads the pages a query touches.
+- The graph is recursive (transitive inheritance, nested compositors). That is a
+  recursive CTE in SQLite, and hand-written traversal in the vendored core
+  otherwise.
+
+`node:sqlite` being experimental does not count against it: it is still a
+`node:` builtin, so the core keeps zero runtime dependencies.
+
 ## The vendoring rule
 
 `core/` is the single implementation. Everything under `skill/scripts/` and
