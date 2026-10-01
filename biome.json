@@ -11,7 +11,6 @@
       "build/**/*.mjs",
       "mcp/**/*.mjs",
       "skill/scripts/**/*.mjs",
-      ".github/scripts/**/*.mjs",
       "*.json",
       "!**/fixtures",
       "!**/data"
@@ -51,13 +50,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "build/**/*.mjs",
-        "core/*.test.mjs",
-        "skill/scripts/*-cli.mjs",
-        "mcp/smoke.mjs",
-        ".github/scripts/**/*.mjs"
-      ],
+      "includes": ["build/**/*.mjs", "core/*.test.mjs", "mcp/smoke.mjs"],
       "linter": {
         "rules": {
           "suspicious": {

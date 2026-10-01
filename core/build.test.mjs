@@ -14,12 +14,23 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {dirname, join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {after, before, describe, test} from 'node:test';
 import {APPLICATION_ID, buildDatabase, USER_VERSION} from '../build/build-db.mjs';
+import {CORE_FILES, checkVendor} from '../build/check-vendor.mjs';
 import {dumpDatabase} from '../build/dump.mjs';
 
 const DB = 'core/data/ooxml.db';
@@ -119,6 +130,39 @@ describe('the build scripts', () => {
       assert.ok(stdout.startsWith('# pragmas\n'), 'dump.mjs printed nothing');
     } finally {
       rmSync(dir, {recursive: true, force: true});
+    }
+  });
+});
+
+describe('the vendoring check', () => {
+  // It runs on every commit, but only ever on the happy path. Its failure
+  // branches are the reason it exists, so they are driven here against a
+  // scratch tree.
+  test('reports a missing file, a drifted module and a drifted graph', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ooxml-vendor-'));
+    try {
+      for (const dir of ['core', 'skill/scripts', 'mcp/src']) {
+        for (const file of CORE_FILES) {
+          mkdirSync(dirname(join(root, dir, file)), {recursive: true});
+          copyFileSync(join('core', file), join(root, dir, file));
+        }
+      }
+      assert.deepEqual(checkVendor({root, quiet: true}), []);
+
+      unlinkSync(join(root, 'skill/scripts/qname.mjs'));
+      writeFileSync(join(root, 'mcp/src/graph.mjs'), '// drifted\n', {flag: 'a'});
+      const vendored = new DatabaseSync(join(root, 'mcp/src/data/ooxml.db'));
+      vendored.exec("UPDATE enums SET value = 'drifted' WHERE id = (SELECT MIN(id) FROM enums)");
+      vendored.close();
+
+      const problems = checkVendor({root, quiet: true}).join('\n');
+      assert.match(problems, /MISSING {2}skill\/scripts\/qname\.mjs/);
+      assert.match(problems, /DRIFT {4}mcp\/src\/graph\.mjs differs/);
+      assert.match(problems, /DRIFT {4}mcp\/src\/data\/ooxml\.db holds a different graph/);
+      // The readable diff is the point of comparing dumps rather than bytes.
+      assert.match(problems, /\+ vendored .*\tdrifted/);
+    } finally {
+      rmSync(root, {recursive: true, force: true});
     }
   });
 });

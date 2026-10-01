@@ -25,7 +25,7 @@ export const USER_VERSION = 1;
 /** 'OOX1' as a big-endian int32 — `file`-style magic for a SQLite payload. */
 export const APPLICATION_ID = 0x4f4f5831;
 
-export const PROFILES = [
+const PROFILES = [
   {key: 'transitional', label: 'ECMA-376 Part 4 — Transitional', dir: 'schemas/ooxml-transitional'},
   {key: 'strict', label: 'ECMA-376 Part 1 — Strict', dir: 'schemas/ooxml-strict'},
 ];

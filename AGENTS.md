@@ -226,4 +226,7 @@ mode. This repo is the half that can be fully local, deterministic and offline.
   process entry, and **every `node:sqlite` call is confined to a single module**
   so an API break costs one file.
 - Tests use `node:test`, run entirely offline, and stay deterministic.
+- Biome, not oxlint as elsewhere in the house stack. Biome here also owns the
+  formatter and the import organiser, so swapping only the linter means two
+  tools on every commit. There has been no lint problem that would pay for it.
 - Author metadata is `shbernal`.

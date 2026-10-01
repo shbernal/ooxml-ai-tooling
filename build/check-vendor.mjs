@@ -41,7 +41,7 @@ export const CORE_FILES = [
   'data/ooxml.db',
 ];
 
-export const VENDOR_DIRS = ['skill/scripts', 'mcp/src'];
+const VENDOR_DIRS = ['skill/scripts', 'mcp/src'];
 
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
@@ -68,11 +68,15 @@ function diffDumps(a, b, limit = 12) {
   return `${lines.join('\n')}\n         …compare in full with: make dump`;
 }
 
-export function checkVendor({quiet = false} = {}) {
+/**
+ * Every way the vendored copies under `root` differ from its `core/`, as
+ * printable lines. Empty means they match.
+ */
+export function checkVendor({root = ROOT, quiet = false} = {}) {
   const log = quiet ? () => {} : (message) => console.log(message);
   const problems = [];
 
-  const corePath = join(ROOT, 'core', 'data', 'ooxml.db');
+  const corePath = join(root, 'core', 'data', 'ooxml.db');
   if (!existsSync(corePath)) {
     // A cold clone has no database. Building it is the correct response — the
     // alternative is a failure that reads like drift when it is just absence.
@@ -84,8 +88,8 @@ export function checkVendor({quiet = false} = {}) {
 
   for (const dir of VENDOR_DIRS) {
     for (const file of CORE_FILES) {
-      const source = join(ROOT, 'core', file);
-      const vendored = join(ROOT, dir, file);
+      const source = join(root, 'core', file);
+      const vendored = join(root, dir, file);
 
       if (!existsSync(vendored)) {
         problems.push(`MISSING  ${dir}/${file} (run: make sync-core)`);
@@ -128,14 +132,16 @@ export function checkVendor({quiet = false} = {}) {
     }
   }
 
+  if (problems.length === 0) {
+    log(`ok   ${CORE_FILES.length} files in each of: ${VENDOR_DIRS.join(' ')}`);
+  }
+  return problems;
+}
+
+if (import.meta.main) {
+  const problems = checkVendor();
   if (problems.length > 0) {
     console.error(problems.join('\n'));
     process.exitCode = 1;
-    return false;
   }
-
-  log(`ok   ${CORE_FILES.length} files in each of: ${VENDOR_DIRS.join(' ')}`);
-  return true;
 }
-
-if (import.meta.main) checkVendor();

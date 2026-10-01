@@ -30,7 +30,7 @@ const XML_NS = 'http://www.w3.org/XML/1998/namespace';
  * the XML namespace's own attributes. References to them resolve to NULL by
  * design, which is why the integrity assertions exempt exactly these two.
  */
-export const FOREIGN_PREFIXES = ['xsd', 'xml'];
+const FOREIGN_PREFIXES = ['xsd', 'xml'];
 
 export const isForeign = (qname) =>
   qname !== null && qname !== undefined && FOREIGN_PREFIXES.some((p) => qname.startsWith(`${p}:`));
@@ -71,7 +71,7 @@ export function listSchemaFiles(dir) {
 }
 
 /** The vocabulary key is the file stem: `wml.xsd` -> `wml`. */
-export function vocabularyOf(path) {
+function vocabularyOf(path) {
   return basename(path, '.xsd');
 }
 
@@ -111,7 +111,7 @@ export function elements(node) {
 }
 
 /** `xsd:sequence` -> `sequence`, after checking the prefix really is the XSD one. */
-export function xsdName(node, prefixes) {
+function xsdName(node, prefixes) {
   const i = node.name.indexOf(':');
   const prefix = i === -1 ? null : node.name.slice(0, i);
   const uri = prefixes.get(prefix);
