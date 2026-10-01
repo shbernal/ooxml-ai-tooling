@@ -12,8 +12,10 @@
  * it.
  */
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {existsSync, readFileSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {after, before, describe, test} from 'node:test';
@@ -97,6 +99,27 @@ describe('determinism', () => {
     assert.match(dump, /CREATE TABLE symbols/);
     assert.match(dump, /CREATE INDEX idx_symbols_name/);
     assert.ok(dump.startsWith(`# pragmas\napplication_id\t${APPLICATION_ID}\n`));
+  });
+});
+
+describe('the build scripts', () => {
+  // Each one runs its body only when invoked directly. A guard that compares
+  // import.meta.url with process.argv[1] by string is false whenever the path
+  // needs percent-encoding or uses backslashes, and then the script exits 0
+  // having done nothing — the Windows CI job would pass without checking
+  // anything. A space in the path is the Linux-reproducible shape of that.
+  test('run when invoked through a path containing a space', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ooxml build '));
+    try {
+      symlinkSync(process.cwd(), join(dir, 'repo'), 'dir');
+      const stdout = execFileSync(process.execPath, [join(dir, 'repo', 'build', 'dump.mjs'), DB], {
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
+      });
+      assert.ok(stdout.startsWith('# pragmas\n'), 'dump.mjs printed nothing');
+    } finally {
+      rmSync(dir, {recursive: true, force: true});
+    }
   });
 });
 

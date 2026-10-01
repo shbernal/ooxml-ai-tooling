@@ -98,7 +98,7 @@ export function dumpDatabase(dbPath) {
   return `${out.join('\n')}\n`;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   // `make dump | head` closes the pipe early. That is normal use of a tool that
   // writes 40k lines to stdout, not an error worth a stack trace.
   process.stdout.on('error', (/** @type {NodeJS.ErrnoException} */ error) => {

@@ -138,4 +138,4 @@ export function checkVendor({quiet = false} = {}) {
   return true;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) checkVendor();
+if (import.meta.main) checkVendor();

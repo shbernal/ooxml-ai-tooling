@@ -225,7 +225,7 @@ function assertIntegrity(db, profiles, log) {
   log(`integrity ok  ${tally}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   const output = process.argv[2] ?? join(ROOT, 'core', 'data', 'ooxml.db');
   const {path, size} = buildDatabase(output);
   const digest = createHash('sha256').update(readFileSync(path)).digest('hex');
