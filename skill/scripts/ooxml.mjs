@@ -32,7 +32,7 @@ const USAGE = `ooxml — query the ECMA-376 schema graph, offline.
 
 Options:
   --profile <transitional|strict>   default: transitional
-  --limit <n>                       search/sql only
+  --limit <1-200>                   search/sql only
   --compact                         force compact JSON (default when not a TTY)
 
 Names may be written w:tblPr, wml:tblPr, {namespace-uri}tblPr, or bare.
@@ -58,6 +58,23 @@ function parseArgv(argv) {
     }
   }
   return {positional, options};
+}
+
+/** The MCP surface caps search at 200 too, so both surfaces answer identically. */
+const MAX_LIMIT = 200;
+
+/**
+ * `--limit`, validated. Unchecked, `Number('abc')` made `sql` report rows it
+ * then did not return, and made `search` fail with a bare SQLite "datatype
+ * mismatch".
+ */
+function limitOf(raw, fallback) {
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_LIMIT) {
+    throw new UsageError(`--limit must be an integer from 1 to ${MAX_LIMIT}, got "${raw}"`);
+  }
+  return n;
 }
 
 function main(argv) {
@@ -109,7 +126,7 @@ function main(argv) {
         emit(
           graph.search(need('a substring'), {
             profile,
-            limit: options.limit === undefined ? 40 : Number(options.limit),
+            limit: limitOf(options.limit, 40),
           }),
         );
         return 0;
@@ -121,7 +138,7 @@ function main(argv) {
         emit(explainDiagnostic(graph, parseDiagnostic(need('a diagnostic as JSON')), {profile}));
         return 0;
       case 'sql':
-        emit(runSql(graph, need('a SELECT statement'), options.limit));
+        emit(runSql(graph, need('a SELECT statement'), limitOf(options.limit, MAX_LIMIT)));
         return 0;
       default:
         throw new UsageError(`unknown command "${command}"`);
@@ -175,15 +192,20 @@ function runSql(graph, statement, limit) {
     throw new UsageError('sql runs one statement at a time');
   }
 
-  const max = limit === undefined ? 200 : Number(limit);
-  const rows = graph._internal.handle.all(trimmed);
+  // The cap is the database's job, not a slice afterwards: a missing join
+  // predicate is an ordinary mistake, and materialising its cross product
+  // exhausts memory long before any slice runs. One row past the limit is what
+  // tells a complete result from a cut one. The closing parenthesis gets its
+  // own line so a trailing `-- comment` cannot swallow it.
+  const rows = graph._internal.handle.all(`SELECT * FROM (${trimmed}\n) LIMIT ${limit + 1}`);
+  const truncated = rows.length > limit;
   return {
     sql: trimmed,
-    count: rows.length,
+    count: Math.min(rows.length, limit),
     // Truncation is reported rather than silent — a quietly cut result set is
     // indistinguishable from a complete one.
-    truncated: rows.length > max,
-    rows: rows.slice(0, max),
+    truncated,
+    rows: rows.slice(0, limit),
   };
 }
 

@@ -10,7 +10,19 @@ runtime notices.
 
 ## Unreleased
 
-Nothing yet.
+### Skill
+
+- **`sql` `count` is the number of rows returned, no longer the size of the
+  full result set.** The limit now goes into the query itself, so a missing
+  join predicate answers with a page instead of exhausting memory, and the full
+  size is no longer known. `truncated: true` still says there were more rows;
+  `SELECT COUNT(*) FROM (…)` gets the old number.
+- `--limit` must be an integer from 1 to 200, the same range the MCP server
+  accepts for `search`. Anything else exits 2 with usage. Before, `sql` with a
+  non-numeric limit reported rows and returned none, and `search` failed with
+  `datatype mismatch`.
+- `sql` columns that share a name are no longer collapsed into one: the second
+  `id` comes back as `id:1`.
 
 ## 0.0.4 — both surfaces
 

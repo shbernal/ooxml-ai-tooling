@@ -132,6 +132,50 @@ describe('the CLI contract', () => {
     assert.throws(() => run(['sql', 'SELECT 1; SELECT 2']), /one statement/);
   });
 
+  test('sql caps the query itself, so a cross join answers instead of exhausting memory', () => {
+    const output = execFileSync(
+      process.execPath,
+      [
+        '--max-old-space-size=256',
+        CLI,
+        'sql',
+        'SELECT s1.id FROM symbols s1, symbols s2',
+        '--limit',
+        '5',
+      ],
+      {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 10_000},
+    );
+    const result = JSON.parse(output);
+    assert.equal(result.rows.length, 5);
+    assert.equal(result.truncated, true);
+  });
+
+  test('sql count describes the rows returned, not the full result set', () => {
+    const result = JSON.parse(run(['sql', 'SELECT key FROM vocabularies', '--limit', '5']));
+    assert.equal(result.count, 5);
+    assert.equal(result.rows.length, 5);
+    assert.equal(result.truncated, true);
+  });
+
+  for (const args of [
+    ['sql', 'SELECT key FROM vocabularies', '--limit', 'abc'],
+    ['search', 'tblPr', '--limit', '1.5'],
+    ['search', 'tblPr', '--limit', '0'],
+    ['search', 'tblPr', '--limit', '201'],
+  ]) {
+    test(`${args[0]} --limit ${args[3]} exits 2 with usage and no output`, () => {
+      try {
+        run(args);
+        assert.fail('expected a non-zero exit');
+      } catch (error) {
+        assert.equal(error.status, 2);
+        assert.equal(error.stdout, '');
+        assert.match(error.stderr, /--limit must be an integer/);
+        assert.match(error.stderr, /ooxml element/);
+      }
+    });
+  }
+
   test('an unknown command exits 2 with usage, not a stack trace', () => {
     try {
       run(['nonsense']);

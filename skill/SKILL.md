@@ -155,6 +155,9 @@ vocabulary under different URIs — so `symbols` has no profile column and every
 *edge* table does. And `symbols.parent_symbol_id` is `0` for a global
 declaration, not NULL.
 
+A result holds at most `--limit` rows (default and maximum 200); `truncated:
+true` means there were more, so page with `LIMIT … OFFSET …` in the query.
+
 Prefer the subcommands where they fit: they resolve inheritance and expand
 group references, and a raw `child_edges` query will not.
 
