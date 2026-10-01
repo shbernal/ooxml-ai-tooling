@@ -10,6 +10,10 @@
     "the vendored copies in skill/scripts/ and mcp/src/ must need no build step,",
     "or `make check-vendor` stops being a byte comparison.",
     "",
+    "The surfaces' entry points are listed by name rather than by directory:",
+    "everything else under skill/scripts/ and mcp/src/ is a vendored copy of",
+    "core/, and a glob would check each of those modules three times over.",
+    "",
     "Two deliberate relaxations, both about signal-to-noise rather than rigour:",
     "",
     "`noImplicitAny` is off. With it on, every unannotated parameter in the",
@@ -39,6 +43,12 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["core/**/*.mjs", "build/**/*.mjs"],
+  "include": [
+    "core/**/*.mjs",
+    "build/**/*.mjs",
+    "mcp/*.mjs",
+    "mcp/src/server.mjs",
+    "skill/scripts/ooxml.mjs"
+  ],
   "exclude": ["core/**/*.test.mjs"]
 }

@@ -50,15 +50,12 @@ jobs:
       - name: Rebuild the database and check the vendored copies
         run: make check-vendor
 
-      # lint --error-on-warnings, tsc --noEmit, the XSD manifest, and the suite.
+      # lint --error-on-warnings, tsc --noEmit, the XSD manifest, the suite, and
+      # the MCP smoke test over real stdio — which covers the transport, the
+      # tool registrations and the zod schemas, none of which the core suite
+      # reaches.
       - name: Verify
         run: pnpm run verify
-
-      # Covers the transport, the tool registrations and the zod schemas, none
-      # of which the core suite reaches — and all of which break a client
-      # without breaking a unit test.
-      - name: Drive the MCP server over stdio
-        run: make smoke
 
   # Not optional, and not about coverage. It earned its place on the first run
   # against a real repository, failing three times for three different reasons —

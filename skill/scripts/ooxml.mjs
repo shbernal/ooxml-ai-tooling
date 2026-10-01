@@ -213,6 +213,7 @@ try {
   process.exitCode = main(process.argv.slice(2));
 } catch (error) {
   const usage = error instanceof UsageError;
-  process.stderr.write(`${error.message}\n${usage ? `\n${USAGE}\n` : ''}`);
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`${message}\n${usage ? `\n${USAGE}\n` : ''}`);
   process.exitCode = usage ? 2 : 1;
 }

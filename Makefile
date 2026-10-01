@@ -21,7 +21,7 @@ help:
 	@echo "sync-core     copy the core modules and database into both surfaces"
 	@echo "check-vendor  verify the vendored copies match"
 	@echo "test          run the core suite"
-	@echo "verify        lint + typecheck + schemas + tests, the same gate CI runs"
+	@echo "verify        lint + typecheck + schemas + tests + smoke, the same gate CI runs"
 	@echo "smoke         drive the MCP server over real stdio JSON-RPC"
 
 # The database is build output, not source: core/data/ooxml.db is gitignored and
@@ -67,4 +67,4 @@ verify:
 # Proves the MCP server answers a real stdio JSON-RPC session, which the unit
 # tests do not cover — they exercise the core, not the transport.
 smoke:
-	node mcp/smoke.mjs
+	pnpm run smoke

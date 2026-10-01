@@ -176,7 +176,7 @@ make test           # the core suite
 make sync-core      # copy the core into both surfaces — run after any core edit
 make check-vendor   # verify the vendored copies match
 make smoke          # drive the MCP server over real stdio JSON-RPC
-pnpm run verify     # lint + test, the gate CI runs
+pnpm run verify     # lint + typecheck + schemas + tests + smoke, the gate CI runs
 ```
 
 Run `make sync-core test check-vendor` before committing any core change.

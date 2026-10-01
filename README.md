@@ -108,7 +108,7 @@ mcp/      the mcp-server-ooxml npm package, a thin adapter over the core
 ```bash
 pnpm install
 make db             # build core/data/ooxml.db from schemas/
-pnpm run verify     # lint + typecheck + schema manifest + tests
+pnpm run verify     # lint + typecheck + schema manifest + tests + smoke
 make sync-core      # copy the core into both surfaces after any core change
 make check-vendor   # fail if a vendored copy has drifted
 make smoke          # drive the MCP server over real stdio JSON-RPC

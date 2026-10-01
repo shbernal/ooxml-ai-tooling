@@ -42,7 +42,9 @@ const NAME = z
   );
 
 /** Compact JSON: an MCP response is going straight into a context window. */
-const reply = (value) => ({content: [{type: 'text', text: JSON.stringify(value)}]});
+const reply = (value) => ({
+  content: [{type: /** @type {const} */ ('text'), text: JSON.stringify(value)}],
+});
 
 server.registerTool(
   'ooxml_element',

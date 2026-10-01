@@ -162,7 +162,7 @@ for (const [name, fn] of checks) {
     console.log(`ok    ${name}`);
   } catch (error) {
     failed += 1;
-    console.error(`FAIL  ${name}\n      ${error.message}`);
+    console.error(`FAIL  ${name}\n      ${error instanceof Error ? error.message : error}`);
   }
 }
 
