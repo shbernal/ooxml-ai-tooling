@@ -220,4 +220,17 @@ server.registerTool(
     reply(explainDiagnostic(graph, {id, description, xpath, partUri}, {profile})),
 );
 
-await server.connect(new StdioServerTransport());
+// Close the database on the way out rather than leaving it to process exit.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    graph.close();
+    process.exit(0);
+  });
+}
+
+// One line on stderr, not an unhandled-rejection stack trace in the client's log.
+await server.connect(new StdioServerTransport()).catch((error) => {
+  process.stderr.write(`mcp-server-ooxml: could not connect: ${error.message}\n`);
+  graph.close();
+  process.exit(1);
+});

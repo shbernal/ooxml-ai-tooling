@@ -13,6 +13,10 @@ import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+// The version current clients negotiate, from the installed SDK rather than a
+// literal: a pinned old version tests a compatibility path, and breaks on the
+// SDK bump that finally drops it.
+import {LATEST_PROTOCOL_VERSION} from '@modelcontextprotocol/sdk/types.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER = join(HERE, 'src', 'server.mjs');
@@ -63,14 +67,15 @@ const checks = [];
 const check = (name, fn) => checks.push([name, fn]);
 
 const init = await request('initialize', {
-  protocolVersion: '2024-11-05',
+  protocolVersion: LATEST_PROTOCOL_VERSION,
   capabilities: {},
   clientInfo: {name: 'smoke', version: '0'},
 });
 notify('notifications/initialized', {});
 
-check('handshake names the server', () => {
+check('handshake names the server and accepts the latest protocol', () => {
   assert.equal(init.result.serverInfo.name, 'ooxml');
+  assert.equal(init.result.protocolVersion, LATEST_PROTOCOL_VERSION);
 });
 
 const listed = await request('tools/list', {});
