@@ -218,6 +218,13 @@ describe('attributes', () => {
     assert.equal(named.type.qname, 's:ST_TwipsMeasure');
   });
 
+  test('always says whether the collection was cut short', () => {
+    // Present on every answer, not only on failure: a field that appears only
+    // when something went wrong is one a caller learns not to check.
+    assert.equal(graph.attributes('w:CT_Ind').truncated, false);
+    assert.equal(graph.attributes('v:CT_Shape').truncated, false);
+  });
+
   test('resolves a required attribute reached through an attributeGroup', () => {
     // dml uses attributeGroups heavily; an unexpanded ref would lose these.
     const result = graph.attributes('a:CT_Blip');

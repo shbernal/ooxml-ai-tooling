@@ -664,10 +664,20 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
 
     const collectFor = (rootSymbolId) => {
       const collected = [];
+      // Shared across the base-type recursion too, so a group referenced by
+      // both a base and a derived type is expanded once, at the base. That is
+      // safe because an attributeGroup carries no per-site variation in
+      // ECMA-376; it would stop being safe if one ever did.
       const seenGroups = new Set();
+      const state = {truncated: false};
 
       const collect = (symbolId, from, depth) => {
-        if (depth > MAX_DEPTH) return;
+        // Recorded, never silent: a short list with no flag reads as the whole
+        // legal set, and the caller would never add the missing attribute.
+        if (depth > MAX_DEPTH) {
+          state.truncated = true;
+          return;
+        }
 
         const base = handle.get(
           `SELECT relation, base_symbol_id FROM inheritance_edges
@@ -720,15 +730,19 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       // collected later, so the last write is the right one.
       const byName = new Map();
       for (const attribute of collected) byName.set(attribute.name, attribute);
-      return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'en'));
+      return {
+        list: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'en')),
+        truncated: state.truncated,
+      };
     };
 
     const describe = ({symbol, via, declaredIn}) => {
-      const list = collectFor(symbol.id);
+      const {list, truncated} = collectFor(symbol.id);
       return {
         type: display(symbol),
         ...(via === null ? {} : {resolved_from: via}),
         ...(declaredIn.length === 0 ? {} : {applies_when_declared_in: declaredIn}),
+        truncated,
         count: list.length,
         attributes: list,
       };

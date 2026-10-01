@@ -20,6 +20,10 @@ runtime notices.
   content-model resolution, so a long enough xpath used to hold the
   single-threaded MCP server for seconds. The MCP server also rejects an
   `xpath` or `description` longer than 4096 characters.
+- `attributes` carries `truncated`, as `children` already did. It is `true`
+  when the inheritance and attributeGroup chain ran past the depth limit and
+  the list is short. No ECMA-376 type reaches that limit today; before, a
+  type that did would have returned a short list with nothing to say so.
 
 ### Skill
 

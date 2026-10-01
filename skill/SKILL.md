@@ -74,7 +74,7 @@ You are hand-writing a paragraph and want to indent it.
 ```bash
 $ node scripts/ooxml.mjs attributes w:CT_Ind --compact
 {"query":"w:CT_Ind","profile":"transitional","found":true,"type":"w:CT_Ind",
- "count":12,"attributes":[{"name":"end","qualified":true,"use":"optional",
+ "truncated":false,"count":12,"attributes":[{"name":"end","qualified":true,"use":"optional",
  "type":{"qname":"w:ST_SignedTwipsMeasure",...
 ```
 
