@@ -10,6 +10,10 @@ on:
   # registry with nothing verified on it.
   workflow_call:
 
+# Actions are on major tags here, unlike publish.yml, which pins SHAs. This
+# workflow holds no publish credential, so a moved tag can break a run but not
+# publish anything; publish.yml calls it only as a gate.
+#
 # Everything here runs offline. The ECMA-376 schemas are vendored, so no job
 # depends on ecma-international.org being up — that was the decisive argument
 # for vendoring rather than fetching at build time.

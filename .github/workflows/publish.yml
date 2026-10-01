@@ -34,6 +34,9 @@ concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: false
 
+# Third-party actions are pinned to commit SHAs here, not to major tags. A tag
+# is a pointer its owner can move, and these jobs hold an OIDC publish identity
+# and the ClawHub token. ci.yml stays on tags: it holds neither.
 jobs:
   # The gate that makes a release trustworthy. Both surfaces vendor the core and
   # the database by file copy, so a release is only correct if check-vendor
@@ -55,17 +58,19 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
 
       # OIDC publishing needs npm >= 11.5.1, which is newer than what any Node
-      # release line bundles today. Pinning Node alone is not enough.
+      # release line bundles today. Pinning Node alone is not enough. Exact, not
+      # @latest: this job can mint a publish token, and whatever npm was
+      # released minutes ago would run next to it and sign with provenance.
       - name: Upgrade npm to a version that can publish over OIDC
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.20.0
 
       # The tag is the only thing a human types at release time, and nothing
       # else ties it to what gets uploaded: tagging v0.2.0 without bumping the
@@ -131,9 +136,9 @@ jobs:
       # from the token, which is why the handle appears here and not below.
       SKILL_REF: '@shbernal/ooxml-lookup'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
 

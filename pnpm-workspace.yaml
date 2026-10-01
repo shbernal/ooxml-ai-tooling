@@ -14,3 +14,9 @@ packages:
 # obvious cause. It is the only dependency in this repo allowed to run one.
 allowBuilds:
   lefthook: true
+
+# Refuse a version published in the last two days, in minutes. Nothing here needs
+# a release the day it ships, and the window this closes is the one between a
+# compromised publish and its takedown. A runner has no user-level pnpm config,
+# so the policy has to live in the repo to apply there.
+minimumReleaseAge: 2880
