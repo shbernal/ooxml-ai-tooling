@@ -129,21 +129,38 @@ const DIAGNOSTICS = {
 export const SUPPORTED_DIAGNOSTIC_IDS = Object.keys(DIAGNOSTICS).sort();
 
 /**
+ * The most ancestor steps an xpath is walked through. Each step is a full
+ * `children()` resolution, and the xpath comes from another program's report,
+ * so an unbounded walk would let one diagnostic hold a single-threaded server
+ * for as long as its path is long. No real OOXML part nests anywhere near this
+ * deep.
+ */
+export const MAX_PATH_STEPS = 64;
+
+/**
  * The last element step of an XPath, and the trail that led to it.
  *
  * `/p:sld[1]/p:cSld[1]/p:spTree[1]` -> `p:spTree`, with the ancestors kept so
  * the answer can say where it is. Positional predicates are dropped: they
- * identify *which* sibling, which the schema has no opinion about.
+ * identify *which* sibling, which the schema has no opinion about. Beyond
+ * `MAX_PATH_STEPS` the leading steps are dropped and `truncated` says so: the
+ * trail no longer starts at the document root.
  */
 export function parseDiagnosticXPath(xpath) {
   const text = String(xpath ?? '').trim();
-  if (text === '') return {steps: [], element: null};
-  const steps = text
+  if (text === '') return {steps: [], element: null, truncated: false};
+  const all = text
     .split('/')
     .filter((step) => step !== '')
     .map((step) => step.replace(/\[[^\]]*\]/g, '').trim())
     .filter((step) => step !== '' && !step.startsWith('@'));
-  return {steps, element: steps.length === 0 ? null : steps[steps.length - 1]};
+  // Kept from the end: the last steps are the ones that disambiguate.
+  const steps = all.length <= MAX_PATH_STEPS ? all : all.slice(-MAX_PATH_STEPS);
+  return {
+    steps,
+    element: steps.length === 0 ? null : steps[steps.length - 1],
+    truncated: steps.length < all.length,
+  };
 }
 
 /**
@@ -152,7 +169,7 @@ export function parseDiagnosticXPath(xpath) {
 export function explainDiagnostic(graph, diagnostic, {profile = 'transitional'} = {}) {
   const id = diagnostic?.id ?? null;
   const description = diagnostic?.description ?? '';
-  const {steps, element} = parseDiagnosticXPath(diagnostic?.xpath);
+  const {steps, element, truncated} = parseDiagnosticXPath(diagnostic?.xpath);
 
   const base = {
     diagnostic: {
@@ -162,7 +179,7 @@ export function explainDiagnostic(graph, diagnostic, {profile = 'transitional'} 
       description: description === '' ? null : description,
     },
     profile,
-    position: {path: steps, element},
+    position: {path: steps, element, truncated},
   };
 
   if (element === null) {

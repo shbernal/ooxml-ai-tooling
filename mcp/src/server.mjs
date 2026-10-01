@@ -202,9 +202,14 @@ server.registerTool(
       id: z.string().optional().describe('The Open XML SDK id, e.g. "Sch_UndeclaredAttribute".'),
       description: z
         .string()
+        .max(4096)
         .optional()
         .describe('The diagnostic message; quoted names are read from it.'),
-      xpath: z.string().describe('Where the problem is, e.g. "/w:document[1]/w:body[1]/w:p[1]".'),
+      // Longer than this is not a position, it is a payload.
+      xpath: z
+        .string()
+        .max(4096)
+        .describe('Where the problem is, e.g. "/w:document[1]/w:body[1]/w:p[1]".'),
       partUri: z.string().optional().describe('The part inside the package, echoed back.'),
       profile: PROFILE,
     },

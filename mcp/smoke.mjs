@@ -131,6 +131,15 @@ check('ooxml_explain resolves a diagnostic', () => {
   assert.equal(explained.legal.type, 'w:CT_Ind');
 });
 
+const oversized = await request('tools/call', {
+  name: 'ooxml_explain',
+  arguments: {xpath: '/w:p'.repeat(2500)},
+});
+check('an oversized xpath is refused, not walked', () => {
+  // An error either way, as long as it arrives: a stalled server times out.
+  assert.ok(oversized.error !== undefined || oversized.result?.isError === true);
+});
+
 const missing = await call('ooxml_element', {qname: 'w:notARealElement'});
 check('a miss is a normal result, not a protocol error', () => {
   assert.equal(missing.found, false);

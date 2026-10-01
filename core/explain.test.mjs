@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import {after, before, describe, test} from 'node:test';
 import {buildDatabase} from '../build/build-db.mjs';
-import {explainDiagnostic, parseDiagnosticXPath, SUPPORTED_DIAGNOSTIC_IDS} from './explain.mjs';
+import {
+  explainDiagnostic,
+  MAX_PATH_STEPS,
+  parseDiagnosticXPath,
+  SUPPORTED_DIAGNOSTIC_IDS,
+} from './explain.mjs';
 import {createGraph} from './graph.mjs';
 
 const DB = 'core/data/ooxml.db';
@@ -19,6 +24,7 @@ describe('xpath parsing', () => {
     assert.deepEqual(parseDiagnosticXPath('/p:sld[1]/p:cSld[1]/p:spTree[1]'), {
       steps: ['p:sld', 'p:cSld', 'p:spTree'],
       element: 'p:spTree',
+      truncated: false,
     });
   });
 
@@ -28,8 +34,20 @@ describe('xpath parsing', () => {
   });
 
   test('survives an empty or missing xpath', () => {
-    assert.deepEqual(parseDiagnosticXPath(''), {steps: [], element: null});
-    assert.deepEqual(parseDiagnosticXPath(undefined), {steps: [], element: null});
+    assert.deepEqual(parseDiagnosticXPath(''), {steps: [], element: null, truncated: false});
+    assert.deepEqual(parseDiagnosticXPath(undefined), {
+      steps: [],
+      element: null,
+      truncated: false,
+    });
+  });
+
+  test('keeps only the last MAX_PATH_STEPS steps, and says so', () => {
+    const xpath = `/w:document/w:body${'/w:tbl/w:tr/w:tc'.repeat(200)}/w:p/w:pPr`;
+    const parsed = parseDiagnosticXPath(xpath);
+    assert.equal(parsed.truncated, true);
+    assert.equal(parsed.steps.length, MAX_PATH_STEPS);
+    assert.deepEqual(parsed.steps.slice(-2), ['w:p', 'w:pPr']);
   });
 });
 
@@ -75,6 +93,31 @@ describe('explain', () => {
     assert.equal(result.legal.ambiguous, undefined);
     assert.equal(result.legal.type, 'w:CT_PPr');
     assert.equal(result.legal.narrowed_by, 'w:p is w:CT_P');
+  });
+
+  test('narrows through a deep but realistic path', () => {
+    const result = explainDiagnostic(graph, {
+      id: 'Sch_UnexpectedElementContentExpectingComplex',
+      description: "The element has invalid child element 'w:bogus'.",
+      xpath: `/w:document/w:body${'/w:tbl/w:tr/w:tc'.repeat(10)}/w:p/w:pPr`,
+    });
+    assert.equal(result.position.truncated, false);
+    assert.equal(result.legal.type, 'w:CT_PPr');
+    assert.equal(result.legal.narrowed_by, 'w:p is w:CT_P');
+  });
+
+  test('bounds the walk for an arbitrarily long xpath', () => {
+    // Each step is a full children() resolution, about 5 ms. Unbounded, this
+    // 604-step path took three seconds and blocked the MCP server throughout.
+    const started = performance.now();
+    const result = explainDiagnostic(graph, {
+      id: 'Sch_UnexpectedElementContentExpectingComplex',
+      description: "The element has invalid child element 'w:bogus'.",
+      xpath: `/w:document/w:body${'/w:tbl/w:tr/w:tc'.repeat(200)}/w:p/w:pPr`,
+    });
+    assert.ok(performance.now() - started < 1000, 'the walk was not bounded');
+    assert.equal(result.position.truncated, true);
+    assert.equal(result.position.path.length, MAX_PATH_STEPS);
   });
 
   test('falls back to every variant when the path cannot decide', () => {

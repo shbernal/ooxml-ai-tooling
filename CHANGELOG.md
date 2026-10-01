@@ -15,6 +15,11 @@ runtime notices.
 - `search` treats `_` and `%` as literal characters. They were LIKE wildcards,
   so `_Tbl` matched `wholeTbl` and `%` matched every symbol, while the response
   still claimed a substring match.
+- `explain` walks at most the last 64 steps of an xpath, and
+  `position.truncated` says when it dropped leading ones. Every step is a full
+  content-model resolution, so a long enough xpath used to hold the
+  single-threaded MCP server for seconds. The MCP server also rejects an
+  `xpath` or `description` longer than 4096 characters.
 
 ### Skill
 
