@@ -1002,7 +1002,11 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       };
     }
 
-    const params = [pid, `%${needle}%`];
+    // `_` and `%` are LIKE wildcards, and `_` is in nearly every ECMA-376 name
+    // (CT_*, ST_*, EG_*). Unescaped, `_Tbl` matched `wholeTbl`. The backslash
+    // goes first so the escapes added after it are not escaped again.
+    const pattern = needle.replace(/[\\%_]/g, (c) => `\\${c}`);
+    const params = [pid, `%${pattern}%`];
     let kindClause = '';
     if (kind !== null) {
       const kinds = Array.isArray(kind) ? kind : [kind];
@@ -1015,7 +1019,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
          FROM symbols s
          JOIN vocabularies v ON v.id = s.vocabulary_id
          JOIN symbol_profiles sp ON sp.symbol_id = s.id AND sp.profile_id = ?
-        WHERE s.local_name LIKE ? COLLATE NOCASE AND s.is_anonymous = 0${kindClause}
+        WHERE s.local_name LIKE ? ESCAPE '\\' COLLATE NOCASE AND s.is_anonymous = 0${kindClause}
         ORDER BY LENGTH(s.local_name), v.key, s.kind, s.local_name
         LIMIT ?`,
       ...params,

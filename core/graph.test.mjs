@@ -391,6 +391,21 @@ describe('search', () => {
     assert.match(result.message, /no symbol name contains/);
   });
 
+  test('treats LIKE wildcards in the query as literal characters', () => {
+    const underscore = graph.search('_Tbl', {limit: 200});
+    assert.equal(underscore.found, true);
+    assert.ok(underscore.results.every((r) => r.qname.toLowerCase().includes('_tbl')));
+    assert.ok(!underscore.results.some((r) => r.qname.endsWith(':wholeTbl')));
+
+    for (const literal of ['%', '\\']) {
+      const result = graph.search(literal);
+      assert.equal(result.found, false);
+      assert.match(result.message, /no symbol name contains/);
+    }
+
+    assert.ok(graph.search('CT_Ind').results.some((r) => r.qname === 'w:CT_Ind'));
+  });
+
   test('never returns the synthesised anonymous symbols', () => {
     // Their names contain '#', which no real symbol can, so they would be
     // visibly wrong in a result list.

@@ -10,6 +10,12 @@ runtime notices.
 
 ## Unreleased
 
+### Both surfaces
+
+- `search` treats `_` and `%` as literal characters. They were LIKE wildcards,
+  so `_Tbl` matched `wholeTbl` and `%` matched every symbol, while the response
+  still claimed a substring match.
+
 ### Skill
 
 - **`sql` `count` is the number of rows returned, no longer the size of the
