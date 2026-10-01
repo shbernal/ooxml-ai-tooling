@@ -5,6 +5,7 @@ import {buildDatabase} from '../build/build-db.mjs';
 import {
   explainDiagnostic,
   MAX_PATH_STEPS,
+  parseDiagnosticText,
   parseDiagnosticXPath,
   SUPPORTED_DIAGNOSTIC_IDS,
 } from './explain.mjs';
@@ -48,6 +49,46 @@ describe('xpath parsing', () => {
     assert.equal(parsed.truncated, true);
     assert.equal(parsed.steps.length, MAX_PATH_STEPS);
     assert.deepEqual(parsed.steps.slice(-2), ['w:p', 'w:pPr']);
+  });
+});
+
+describe('pasted diagnostic text', () => {
+  test('recovers the id, xpath and part, and keeps the whole text as the description', () => {
+    const text =
+      "Sch_UndeclaredAttribute: The 'bogus' attribute is not declared. " +
+      'Part: /word/document.xml Path: /w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]';
+    assert.deepEqual(parseDiagnosticText(text), {
+      id: 'Sch_UndeclaredAttribute',
+      description: text,
+      partUri: '/word/document.xml',
+      xpath: '/w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]',
+    });
+  });
+
+  test('does not read a namespace URI as a path', () => {
+    const text =
+      "The element has invalid child element 'http://schemas.openxmlformats.org/" +
+      "wordprocessingml/2006/main:bogus'.";
+    assert.deepEqual(parseDiagnosticText(text), {description: text});
+  });
+
+  test('resolves through the same path as a structured diagnostic', () => {
+    const fromText = explainDiagnostic(
+      graph,
+      parseDiagnosticText(
+        "Sch_UnexpectedElementContentExpectingComplex: The element has invalid child element 'w:bogus'. " +
+          '/w:document[1]/w:body[1]/w:p[1]/w:pPr[1]',
+      ),
+    );
+    assert.equal(fromText.resolved, true);
+    assert.deepEqual(fromText.finding, {kind: 'unexpected_child', name: 'w:bogus'});
+    assert.equal(fromText.legal.narrowed_by, 'w:p is w:CT_P');
+  });
+
+  test('text with nothing recoverable degrades instead of failing', () => {
+    const result = explainDiagnostic(graph, parseDiagnosticText('something went wrong'));
+    assert.equal(result.resolved, false);
+    assert.equal(result.reason, 'no_position');
   });
 });
 

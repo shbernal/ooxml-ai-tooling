@@ -13,7 +13,7 @@
  * cosmetic: without it `node:sqlite` writes a paragraph of English to stderr on
  * the first call, and an agent piping this into a parser sees noise.
  */
-import {explainDiagnostic} from './explain.mjs';
+import {explainDiagnostic, parseDiagnosticText} from './explain.mjs';
 import {createGraph} from './graph.mjs';
 
 const USAGE = `ooxml — query the ECMA-376 schema graph, offline.
@@ -27,7 +27,7 @@ const USAGE = `ooxml — query the ECMA-376 schema graph, offline.
   ooxml namespace  <uri|prefix> namespace <-> vocabulary, both directions
   ooxml search     <substring>  find symbols by name (substring, not semantic)
   ooxml diff       <qname>      what Transitional adds to Strict for this symbol
-  ooxml explain    <json>       resolve a validator diagnostic against the schema
+  ooxml explain    <json|text>  resolve a validator diagnostic against the schema
   ooxml sql        <select>     read-only SQL against the graph (advanced)
 
 Options:
@@ -135,7 +135,7 @@ function main(argv) {
         emit(graph.diff_profiles(need('a name')));
         return 0;
       case 'explain':
-        emit(explainDiagnostic(graph, parseDiagnostic(need('a diagnostic as JSON')), {profile}));
+        emit(explainDiagnostic(graph, parseDiagnostic(need('a diagnostic')), {profile}));
         return 0;
       case 'sql':
         emit(runSql(graph, need('a SELECT statement'), limitOf(options.limit, MAX_LIMIT)));
@@ -151,17 +151,21 @@ function main(argv) {
 class UsageError extends Error {}
 
 /**
- * The diagnostic, as JSON. Accepts a whole `ooxml-validate` report and takes its
- * first diagnostic, because that is what people actually have in hand — but the
- * four fields are still all that is read (see core/explain.mjs).
+ * The diagnostic, as JSON or as pasted text. JSON may be a whole
+ * `ooxml-validate` report, of which the first diagnostic is taken, because that
+ * is what people actually have in hand — but the four fields are still all that
+ * is read (see core/explain.mjs). Anything that does not start like JSON is
+ * read as text.
  */
 function parseDiagnostic(text) {
+  if (!/^\s*[[{]/.test(text)) return parseDiagnosticText(text);
   let value;
   try {
     value = JSON.parse(text);
   } catch {
+    // It started like JSON, so a parse failure is a typo, not a pasted message.
     throw new UsageError(
-      'explain expects JSON. Pass the diagnostic object from an ooxml-validate ' +
+      'explain could not parse that JSON. Pass the diagnostic object from an ooxml-validate ' +
         'report, e.g. \'{"id":"Sch_UndeclaredAttribute","description":"...","xpath":"/w:document[1]"}\'',
     );
   }

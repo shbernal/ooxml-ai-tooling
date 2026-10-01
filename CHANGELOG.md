@@ -12,6 +12,13 @@ runtime notices.
 
 ### Both surfaces
 
+- `explain` accepts a diagnostic pasted as text, for when there is no JSON
+  report in hand. The id, xpath, part URI and quoted names are recovered where
+  present; anything missing degrades the way a structured diagnostic missing
+  it does. On MCP it is a new `text` argument, used instead of the structured
+  fields, and `xpath` is no longer required. The CLI reads any argument that
+  does not start like JSON as text.
+
 - `search` treats `_` and `%` as literal characters. They were LIKE wildcards,
   so `_Tbl` matched `wholeTbl` and `%` matched every symbol, while the response
   still claimed a substring match.

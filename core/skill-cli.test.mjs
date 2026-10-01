@@ -121,6 +121,29 @@ describe('the CLI contract', () => {
     assert.deepEqual(report.legal.type, bare.legal.type);
   });
 
+  test('explain reads a pasted diagnostic line when there is no JSON', () => {
+    const result = JSON.parse(
+      run([
+        'explain',
+        "Sch_UndeclaredAttribute: The 'bogus' attribute is not declared. " +
+          'at /w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]',
+        '--compact',
+      ]),
+    );
+    assert.equal(result.resolved, true);
+    assert.equal(result.legal.type, 'w:CT_Ind');
+  });
+
+  test('explain treats malformed JSON as a typo, not as text', () => {
+    try {
+      run(['explain', '{"id": "Sch_UndeclaredAttribute",']);
+      assert.fail('expected a non-zero exit');
+    } catch (error) {
+      assert.equal(error.status, 2);
+      assert.match(error.stderr, /could not parse that JSON/);
+    }
+  });
+
   test('sql is read-only and refuses anything that is not a query', () => {
     const rows = JSON.parse(run(['sql', 'SELECT key FROM profiles ORDER BY id', '--compact']));
     assert.deepEqual(

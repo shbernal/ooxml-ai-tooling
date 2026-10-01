@@ -19,7 +19,7 @@ import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 import {z} from 'zod';
 import pkg from '../package.json' with {type: 'json'};
-import {explainDiagnostic} from './explain.mjs';
+import {explainDiagnostic, parseDiagnosticText} from './explain.mjs';
 import {createGraph} from './graph.mjs';
 
 const graph = createGraph();
@@ -198,8 +198,10 @@ server.registerTool(
       'plus the legal attributes or the ordered content model at that position. The xpath is ' +
       'used to disambiguate: an element with several content models resolves to the right one ' +
       'from its ancestors. An unrecognised diagnostic id is not an error — it still answers what ' +
-      'is legal at that position. This tool CONSUMES validator output; it does not validate ' +
-      'anything, and nothing needs to be installed for it.',
+      'is legal at that position. With only a pasted message in hand, pass it as `text` instead ' +
+      'of the structured fields: the id, xpath and quoted names are recovered from it where ' +
+      'present. This tool CONSUMES validator output; it does not validate anything, and nothing ' +
+      'needs to be installed for it.',
     inputSchema: {
       id: z.string().optional().describe('The Open XML SDK id, e.g. "Sch_UndeclaredAttribute".'),
       description: z
@@ -211,13 +213,37 @@ server.registerTool(
       xpath: z
         .string()
         .max(4096)
+        .optional()
         .describe('Where the problem is, e.g. "/w:document[1]/w:body[1]/w:p[1]".'),
       partUri: z.string().optional().describe('The part inside the package, echoed back.'),
+      text: z
+        .string()
+        .max(4096)
+        .optional()
+        .describe(
+          'The diagnostic as pasted text, when there is no structured report. Use instead of ' +
+            'id, description, xpath and partUri, not alongside them.',
+        ),
       profile: PROFILE,
     },
   },
-  ({id, description, xpath, partUri, profile = 'transitional'}) =>
-    reply(explainDiagnostic(graph, {id, description, xpath, partUri}, {profile})),
+  ({id, description, xpath, partUri, text, profile = 'transitional'}) => {
+    if (text !== undefined) {
+      if ([id, description, xpath, partUri].some((field) => field !== undefined)) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: /** @type {const} */ ('text'),
+              text: 'Pass either `text` or the structured fields (id, description, xpath, partUri), not both.',
+            },
+          ],
+        };
+      }
+      return reply(explainDiagnostic(graph, parseDiagnosticText(text), {profile}));
+    }
+    return reply(explainDiagnostic(graph, {id, description, xpath, partUri}, {profile}));
+  },
 );
 
 // Close the database on the way out rather than leaving it to process exit.

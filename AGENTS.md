@@ -112,6 +112,11 @@ blast radius when the report changes.
 Do not widen `explain` to consume the whole report. If a future change needs
 more of it, argue against this paragraph first.
 
+`explain` also accepts a diagnostic as pasted text, read into those same four
+fields on a best-effort basis. That is a second input *shape*, not more of the
+report: it reads nothing the four fields do not carry, and resolution still goes
+through the same id allowlist.
+
 ## Scope: ECMA-376 and nothing else
 
 Both of these are the kind of thing a future session will helpfully try to

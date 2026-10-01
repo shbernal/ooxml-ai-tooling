@@ -19,6 +19,9 @@
  * `description` need text handling, and that is a bounded regex per id rather
  * than a grammar.
  *
+ * A diagnostic pasted as text is read into the same four fields by
+ * `parseDiagnosticText`, so the text form adds an input shape and nothing else.
+ *
  * Reading exactly four fields is the deliberate mitigation for a **cross-repo
  * contract**: `ooxml-validate` is pre-1.0 and does not freeze its report shape,
  * so anything outside those four moving is a non-event here. Do not widen this
@@ -160,6 +163,39 @@ export function parseDiagnosticXPath(xpath) {
     steps,
     element: steps.length === 0 ? null : steps[steps.length - 1],
     truncated: steps.length < all.length,
+  };
+}
+
+/**
+ * A diagnostic pasted as text — a log line, a terminal message — read into the
+ * same four fields the JSON form carries.
+ *
+ * The text has no grammar, so this recovers what it can and leaves the rest
+ * out: a `Sch_*` id, the longest run of `/prefix:name[n]` steps as the xpath,
+ * and a `.xml` part URI. The whole text stays the `description`, because the
+ * per-id regexes already find quoted names inside a longer message. Nothing
+ * here throws: an unrecovered id or position degrades through
+ * `explainDiagnostic` exactly as a structured diagnostic missing them would.
+ *
+ * @param {string} text
+ * @returns {{id?: string, description: string, partUri?: string, xpath?: string}}
+ */
+export function parseDiagnosticText(text) {
+  const description = String(text ?? '').trim();
+  const id = /\bSch_[A-Za-z]+\b/.exec(description)?.[0];
+  // Not preceded by a word or URL character: the namespace URI in
+  // `'http://…/2006/main:bogus'` must not read as a one-step path.
+  const xpath = [
+    ...description.matchAll(/(?<![\w./:-])(?:\/@?[A-Za-z_][\w.-]*:[A-Za-z_][\w.-]*(?:\[\d+\])?)+/g),
+  ]
+    .map((match) => match[0])
+    .sort((a, b) => b.length - a.length)[0];
+  const partUri = /(?<![\w:/])\/[\w.-]+(?:\/[\w.-]+)*\.xml\b/.exec(description)?.[0];
+  return {
+    ...(id === undefined ? {} : {id}),
+    description,
+    ...(partUri === undefined ? {} : {partUri}),
+    ...(xpath === undefined ? {} : {xpath}),
   };
 }
 

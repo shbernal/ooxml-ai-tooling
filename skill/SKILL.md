@@ -64,6 +64,16 @@ will use the first diagnostic — and answers the question that always follows:
 *then what would have been legal there.* The xpath does real work: it
 disambiguates a name with several content models by looking at its ancestors.
 
+With only a pasted message and no JSON, pass the text as it is:
+
+```bash
+node scripts/ooxml.mjs explain "Sch_UndeclaredAttribute: The 'bogus' attribute
+  is not declared. at /w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]"
+```
+
+The id, the xpath and the quoted names are picked out where present. Without an
+xpath there is no position to answer for, so include it if you have it.
+
 An id it does not recognise is not a failure; it still tells you what the
 schema allows at that position.
 

@@ -41,7 +41,7 @@ first-run download, no data directory, and nothing to configure.
 | `ooxml_search` | Find symbols by name substring |
 | `ooxml_namespace` | Namespace ↔ prefix ↔ vocabulary, both directions |
 | `ooxml_diff_profiles` | What Transitional adds to Strict for one symbol |
-| `ooxml_explain` | Resolve a validation diagnostic into "here is what would be legal" |
+| `ooxml_explain` | Resolve a validation diagnostic, structured or pasted as text, into "here is what would be legal" |
 
 Three things the tools do that a naive schema browser does not, because each is
 otherwise a confidently wrong answer:

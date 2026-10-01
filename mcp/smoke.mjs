@@ -136,6 +136,24 @@ check('ooxml_explain resolves a diagnostic', () => {
   assert.equal(explained.legal.type, 'w:CT_Ind');
 });
 
+const pasted = await call('ooxml_explain', {
+  text:
+    "Sch_UndeclaredAttribute: The 'bogus' attribute is not declared. " +
+    'at /w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]',
+});
+check('ooxml_explain reads a pasted diagnostic', () => {
+  assert.equal(pasted.resolved, true);
+  assert.equal(pasted.legal.type, 'w:CT_Ind');
+});
+
+const mixed = await request('tools/call', {
+  name: 'ooxml_explain',
+  arguments: {text: 'anything', xpath: '/w:p'},
+});
+check('ooxml_explain refuses text alongside the structured fields', () => {
+  assert.equal(mixed.result?.isError, true);
+});
+
 const oversized = await request('tools/call', {
   name: 'ooxml_explain',
   arguments: {xpath: '/w:p'.repeat(2500)},
