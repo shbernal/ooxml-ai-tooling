@@ -17,7 +17,7 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "pnpm@11.21.0",
+  "packageManager": "pnpm@12.8.2",
   "scripts": {
     "lint": "biome check --error-on-warnings",
     "lint:fix": "biome check --write --error-on-warnings",
@@ -30,10 +30,10 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.14",
+    "@biomejs/biome": "2.5.15",
     "@rgrove/parse-xml": "^5.0.0",
-    "@types/node": "^26.6.2",
-    "lefthook": "^2.1.14",
+    "@types/node": "^26.6.3",
+    "lefthook": "^2.1.16",
     "typescript": "^7.0.2"
   }
 }
