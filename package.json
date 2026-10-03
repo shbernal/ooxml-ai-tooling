@@ -22,7 +22,7 @@
     "lint": "biome check --error-on-warnings",
     "lint:fix": "biome check --write --error-on-warnings",
     "format": "biome format --write",
-    "test": "node --test 'core/*.test.mjs'",
+    "test": "node --test 'core/*.test.mjs' 'mcp/*.test.mjs'",
     "check-schemas": "node build/check-schemas.mjs",
     "build:db": "node build/build-db.mjs",
     "smoke": "node mcp/smoke.mjs",

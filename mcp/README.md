@@ -43,6 +43,11 @@ first-run download, no data directory, and nothing to configure.
 | `ooxml_diff_profiles` | What Transitional adds to Strict for one symbol |
 | `ooxml_explain` | Resolve a validation diagnostic, structured or pasted as text, into "here is what would be legal" |
 
+Every tool declares an output schema and returns its answer as
+`structuredContent`, with the same JSON in a text block for clients that do
+not read structured results. A miss is an answer, not an error: `found: false`
+with a `reason` that says which kind of miss it is.
+
 Three things the tools do that a naive schema browser does not, because each is
 otherwise a confidently wrong answer:
 

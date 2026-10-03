@@ -203,7 +203,7 @@ bare checkout) and each must be self-contained.
 ```bash
 pnpm install        # both package trees at once
 make db             # build core/data/ooxml.db from schemas/
-make test           # the core suite
+make test           # the core suite, plus the MCP output schemas against the graph
 make sync-core      # copy the core into both surfaces — run after any core edit
 make check-vendor   # verify the vendored copies match
 make smoke          # drive the MCP server over real stdio JSON-RPC

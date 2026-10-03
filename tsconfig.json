@@ -50,5 +50,5 @@
     "mcp/src/server.mjs",
     "skill/scripts/ooxml.mjs"
   ],
-  "exclude": ["core/**/*.test.mjs"]
+  "exclude": ["core/**/*.test.mjs", "mcp/*.test.mjs"]
 }

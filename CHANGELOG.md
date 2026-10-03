@@ -32,6 +32,14 @@ runtime notices.
   the list is short. No ECMA-376 type reaches that limit today; before, a
   type that did would have returned a short list with nothing to say so.
 
+### MCP server
+
+- Every tool declares an `outputSchema` and returns `structuredContent`
+  alongside the text block, which carries the same JSON as before. The server
+  checks each answer against the exact found / not-found / ambiguous shape
+  before sending it, so a response that drifts from its schema is now a tool
+  error rather than a silent change.
+
 ### Skill
 
 - **`sql` `count` is the number of rows returned, no longer the size of the

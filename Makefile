@@ -20,7 +20,7 @@ help:
 	@echo "check-schemas verify the vendored XSDs against schemas/SHA256SUMS"
 	@echo "sync-core     copy the core modules and database into both surfaces"
 	@echo "check-vendor  verify the vendored copies match"
-	@echo "test          run the core suite"
+	@echo "test          run the core suite and the MCP output-schema check"
 	@echo "verify        lint + typecheck + schemas + tests + smoke, the same gate CI runs"
 	@echo "smoke         drive the MCP server over real stdio JSON-RPC"
 
@@ -59,7 +59,7 @@ check-vendor:
 	@node build/check-vendor.mjs
 
 test:
-	node --test 'core/*.test.mjs'
+	node --test 'core/*.test.mjs' 'mcp/*.test.mjs'
 
 verify:
 	pnpm run verify

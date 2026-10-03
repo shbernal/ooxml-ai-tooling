@@ -21,6 +21,7 @@ import {z} from 'zod';
 import pkg from '../package.json' with {type: 'json'};
 import {explainDiagnostic, parseDiagnosticText} from './explain.mjs';
 import {createGraph} from './graph.mjs';
+import * as OUTPUT from './schemas.mjs';
 
 const graph = createGraph();
 const server = new McpServer({name: 'ooxml', version: pkg.version});
@@ -41,8 +42,14 @@ const NAME = z
       'A bare or ambiguous name returns every match rather than guessing.',
   );
 
-/** Compact JSON: an MCP response is going straight into a context window. */
+/**
+ * The answer twice: as `structuredContent`, which the SDK checks against the
+ * tool's output schema, and as compact JSON text for a client that predates
+ * structured results. The text goes straight into a context window, hence
+ * compact.
+ */
 const reply = (value) => ({
+  structuredContent: value,
   content: [{type: /** @type {const} */ ('text'), text: JSON.stringify(value)}],
 });
 
@@ -59,6 +66,7 @@ server.registerTool(
       'matches, the reason distinguishes an unknown name from one that exists only in the other ' +
       'profile, because those need opposite next steps.',
     inputSchema: {qname: NAME, profile: PROFILE},
+    outputSchema: OUTPUT.ELEMENT,
   },
   ({qname, profile = 'transitional'}) => reply(graph.element(qname, {profile})),
 );
@@ -76,6 +84,7 @@ server.registerTool(
       "at all and consist entirely of a group reference. Cardinalities are the reference site's: " +
       'min/max of -1 means unbounded. Accepts an element or a type name.',
     inputSchema: {qname: NAME, profile: PROFILE},
+    outputSchema: OUTPUT.CHILDREN,
   },
   ({qname, profile = 'transitional'}) => reply(graph.children(qname, {profile})),
 );
@@ -92,6 +101,7 @@ server.registerTool(
       'getting it wrong produces a document that looks right and does not load. An empty list is ' +
       'a real answer: plenty of OOXML types carry their properties as child elements instead.',
     inputSchema: {qname: NAME, profile: PROFILE},
+    outputSchema: OUTPUT.ATTRIBUTES,
   },
   ({qname, profile = 'transitional'}) => reply(graph.attributes(qname, {profile})),
 );
@@ -108,6 +118,7 @@ server.registerTool(
       'measure types, which are unions, and reports inline union alternatives that have no name ' +
       'of their own. Accepts a simple type, or an element/attribute whose type you want.',
     inputSchema: {qname: NAME, profile: PROFILE},
+    outputSchema: OUTPUT.VALUES,
   },
   ({qname, profile = 'transitional'}) => reply(graph.values(qname, {profile})),
 );
@@ -122,6 +133,7 @@ server.registerTool(
       'points at ooxml_values rather than returning an empty list that reads like "no legal ' +
       'values".',
     inputSchema: {qname: NAME, profile: PROFILE},
+    outputSchema: OUTPUT.ENUM,
   },
   ({qname, profile = 'transitional'}) => reply(graph.enum(qname, {profile})),
 );
@@ -136,6 +148,7 @@ server.registerTool(
       'children and group references it has, how many attributes. Use it to orient before ' +
       'asking for the full content model.',
     inputSchema: {qname: NAME, profile: PROFILE},
+    outputSchema: OUTPUT.TYPE,
   },
   ({qname, profile = 'transitional'}) => reply(graph.type(qname, {profile})),
 );
@@ -154,6 +167,7 @@ server.registerTool(
       profile: PROFILE,
       limit: z.number().int().positive().max(200).optional().describe('Default 40.'),
     },
+    outputSchema: OUTPUT.SEARCH,
   },
   ({text, profile = 'transitional', limit}) => reply(graph.search(text, {profile, limit})),
 );
@@ -169,6 +183,7 @@ server.registerTool(
     inputSchema: {
       query: z.string().describe('A namespace URI, a prefix like "w", or a vocabulary like "wml".'),
     },
+    outputSchema: OUTPUT.NAMESPACE,
   },
   ({query}) => reply(graph.namespace(query)),
 );
@@ -183,6 +198,7 @@ server.registerTool(
       'difference is something Transitional adds back for legacy compatibility — so this ' +
       'answers "will this still be valid in Strict".',
     inputSchema: {qname: NAME},
+    outputSchema: OUTPUT.DIFF_PROFILES,
   },
   ({qname}) => reply(graph.diff_profiles(qname)),
 );
@@ -226,6 +242,7 @@ server.registerTool(
         ),
       profile: PROFILE,
     },
+    outputSchema: OUTPUT.EXPLAIN,
   },
   ({id, description, xpath, partUri, text, profile = 'transitional'}) => {
     if (text !== undefined) {

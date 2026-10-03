@@ -96,13 +96,25 @@ check('every tool is registered', () => {
   ]);
 });
 
+check('every tool advertises an object output schema', () => {
+  // MCP requires an object here, and the SDK lists nothing at all for a
+  // schema it cannot read as one, so a missing schema is the failure to catch.
+  for (const tool of listed.result.tools) {
+    assert.equal(tool.outputSchema?.type, 'object', `${tool.name} has no output schema`);
+  }
+});
+
 const call = async (name, args) => {
   const response = await request('tools/call', {name, arguments: args});
   assert.ok(
     response.result !== undefined,
     `${name} returned an error: ${JSON.stringify(response.error)}`,
   );
-  return JSON.parse(response.result.content[0].text);
+  assert.notEqual(response.result.isError, true, response.result.content?.[0]?.text);
+  const answer = JSON.parse(response.result.content[0].text);
+  // The text block is the same answer, for clients that predate structured results.
+  assert.deepEqual(response.result.structuredContent, answer);
+  return answer;
 };
 
 const element = await call('ooxml_element', {qname: 'w:tbl'});
