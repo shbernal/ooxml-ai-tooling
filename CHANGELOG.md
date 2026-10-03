@@ -12,6 +12,24 @@ runtime notices.
 
 ### Both surfaces
 
+- **The package parts are in the graph.** Part 2's schemas, vendored since
+  `0.0.1` but never read, are ingested into both profiles: `[Content_Types].xml`
+  (`Types`, `Default`, `Override`), `.rels` (`Relationships`, `Relationship`,
+  `ST_TargetMode`), core properties and package signatures. `cp:` and `mdssi:`
+  resolve as aliases with citations. The two default-namespace parts have no
+  prefix, so they are reached by bare name or by vocabulary key
+  (`opc-contentTypes:Override`).
+- The `dc:` and `dcterms:` elements inside `cp:coreProperties` are Dublin Core,
+  which ECMA-376 references without defining. They are recorded untyped, and
+  every answer about one carries `external_source`, naming where it is really
+  defined. That way a `null` type reads as "not recorded here", not "none".
+- `diff_profiles` says `identical, namespace URI included` for a packaging
+  symbol, whose URI is the same in both profiles, instead of implying the URI
+  differs.
+- The database schema is version 2: `vocabularies.external_source` is new, and a
+  namespace URI is unique per profile, no longer globally. A `sql` query that
+  assumed one row per URI now sees two for the packaging namespaces.
+
 - `explain` accepts a diagnostic pasted as text, for when there is no JSON
   report in hand. The id, xpath, part URI and quoted names are recovered where
   present; anything missing degrades the way a structured diagnostic missing

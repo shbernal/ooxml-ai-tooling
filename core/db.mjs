@@ -15,7 +15,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {silenceSqliteExperimentalWarning} from './warnings.mjs';
 
 /** Must match `build/build-db.mjs`. Bumped whenever `build/schema.sql` changes. */
-export const EXPECTED_USER_VERSION = 1;
+export const EXPECTED_USER_VERSION = 2;
 export const EXPECTED_APPLICATION_ID = 0x4f4f5831;
 
 export const DEFAULT_DB_PATH = new URL('./data/ooxml.db', import.meta.url);

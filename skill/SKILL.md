@@ -8,7 +8,8 @@ description: >-
   prefix to write, and what the difference is between the Transitional and
   Strict profiles. Also resolves a schema validation error into "here is what
   would have been legal at that position". Covers wordprocessingml,
-  spreadsheetml, presentationml, drawingml and vml. Does NOT validate files
+  spreadsheetml, presentationml, drawingml, vml and the package parts
+  ([Content_Types].xml, .rels, docProps/core.xml). Does NOT validate files
   (that is ooxml-validate), does not generate documents, and has no
   specification prose, behaviour notes or semantic search — it answers from the
   XSD schema graph only.
@@ -139,6 +140,16 @@ the standard actually says. **Answers come back in the canonical spelling**, so
 VML's excel namespace, and printing both as `x:` would render two different
 namespaces identically. The lookup checks both and returns whichever actually
 has the name.
+
+The package parts are covered too, in both profiles, since packaging is the
+same in each. `cp:coreProperties` and `mdssi:` resolve on the same
+cited-alias basis. `[Content_Types].xml` and `.rels` are written on the default
+namespace, so they have no prefix: use the bare name (`Types`, `Relationship`)
+or the vocabulary key (`opc-contentTypes:Override`). The `dc:` and `dcterms:`
+children of `cp:coreProperties` are Dublin Core, which ECMA-376 references but
+does not define. They answer with `type:null` and an `external_source` naming
+where they are really defined, so read that `null` as "not recorded here", not
+as "untyped".
 
 An ambiguous name returns `ambiguous:true` and a `variants` array, one entry per
 distinct meaning. The `message` says which kind of ambiguity it is: several

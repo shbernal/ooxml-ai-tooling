@@ -77,20 +77,31 @@ CREATE TABLE profiles (
 -- One row per schema *file stem*, shared across profiles: 'wml', 'sml', 'pml',
 -- 'dml-main', 'shared-commonSimpleTypes', … Both archives use the same
 -- filenames, which is what makes this stable across profiles.
+--
+-- Two rows are not schema files: 'dc' and 'dcterms', the Dublin Core
+-- namespaces Part 2's core properties are built from. ECMA-376 references
+-- their elements without defining them, so they hold just the elements it
+-- references, untyped, and `external_source` says where the definitions
+-- really are. It is NULL for every vocabulary ECMA-376 defines itself, which
+-- is what lets a query tell "no type" apart from "typed somewhere else".
 CREATE TABLE vocabularies (
-  id  INTEGER PRIMARY KEY,
-  key TEXT NOT NULL UNIQUE
+  id              INTEGER PRIMARY KEY,
+  key             TEXT NOT NULL UNIQUE,
+  external_source TEXT
 );
 
--- The profile-scoped alias. `uri` is globally unique because no two vocabularies
--- share a target namespace in either archive (the ingest asserts this).
+-- The profile-scoped alias. A URI names one vocabulary — no two share a target
+-- namespace in either archive, and the ingest asserts it — but it may serve
+-- both profiles: Part 2's packaging namespaces are the same in a Strict package
+-- as in a Transitional one. Unique per profile, then, not globally.
 CREATE TABLE namespaces (
   id               INTEGER PRIMARY KEY,
   vocabulary_id    INTEGER NOT NULL REFERENCES vocabularies(id),
   profile_id       INTEGER NOT NULL REFERENCES profiles(id),
-  uri              TEXT NOT NULL UNIQUE,
+  uri              TEXT NOT NULL,
   preferred_prefix TEXT,        -- the prefix the schema binds to its own target namespace
-  UNIQUE (vocabulary_id, profile_id)
+  UNIQUE (vocabulary_id, profile_id),
+  UNIQUE (uri, profile_id)
 );
 
 -- Prefixes the *ecosystem* writes for a namespace the XSDs themselves never

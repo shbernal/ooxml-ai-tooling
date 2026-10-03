@@ -131,6 +131,13 @@ Both of these are the kind of thing a future session will helpfully try to
 > modelling, and the readily available behaviour corpus is **xlsx-shaped**, which
 > would bias a tool that must serve wml, sml, pml and dml equally.
 
+The one thing from outside ECMA-376 in the graph is a record of what it
+*references*: the Dublin Core elements Part 2's core properties are built from.
+They are untyped, and their vocabulary's `external_source` says where they are
+defined. Do not "complete" them by vendoring the Dublin Core schemas. That
+would bring in a standard this repo does not model, for the sake of fields
+whose content is plain text anyway.
+
 The surfaces serve **the table, not the XML**: no tool returns raw XSD source at
 v1. Ship the structured answers first and see what is actually missing.
 

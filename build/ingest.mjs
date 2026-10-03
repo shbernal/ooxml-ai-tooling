@@ -11,7 +11,12 @@
  * Determinism is a property of pass 1: ids come from sorting, never from the
  * order the filesystem handed us files. See schema.sql.
  */
-import {elements, isForeign, occurs, parseSchema} from './parse.mjs';
+import {EXTERNAL_VOCABULARIES, elements, isForeign, occurs, parseSchema} from './parse.mjs';
+
+/** Vocabulary key -> {uri, source}, for the namespaces ECMA-376 only references. */
+const EXTERNAL = new Map(
+  [...EXTERNAL_VOCABULARIES].map(([uri, {key, source}]) => [key, {uri, source}]),
+);
 
 /**
  * Symbols are keyed by identity, not by id — ids do not exist until pass 1 ends.
@@ -134,6 +139,13 @@ export function declareSymbols(parsed) {
               profile.key,
             );
           }
+          // A reference into a namespace ECMA-376 does not define has nothing to
+          // resolve against, so the referenced element is declared here, once,
+          // as a bare global. See EXTERNAL_VOCABULARIES.
+          for (const ref of externalRefs(schema, node)) {
+            const [vocabulary, name] = ref.split(':');
+            declare(vocabulary, 'element', name, GLOBAL, null, profile.key);
+          }
           for (const anonymous of anonymousMembers(schema, node, localName)) {
             declare(
               schema.vocabulary,
@@ -181,6 +193,19 @@ function anonymousMembers(schema, node, ownerName) {
       }
       found.push({name: `${ownerName}#${found.length + 1}`, node: member});
     }
+  }
+  return found;
+}
+
+/** Canonical refs of every descendant `xsd:element` that points outside ECMA-376. */
+function externalRefs(schema, node, found = []) {
+  for (const child of elements(node)) {
+    if (schema.name(child) === 'element' && child.attributes.ref !== undefined) {
+      const ref = schema.canonical(child.attributes.ref);
+      if (EXTERNAL.has(ref.slice(0, ref.indexOf(':')))) found.push(ref);
+      continue;
+    }
+    externalRefs(schema, child, found);
   }
   return found;
 }
@@ -255,11 +280,13 @@ export function writeSymbols(db, parsed, universe) {
   }
 
   const vocabIds = new Map();
-  const insertVocab = db.prepare('INSERT INTO vocabularies (id, key) VALUES (?, ?)');
+  const insertVocab = db.prepare(
+    'INSERT INTO vocabularies (id, key, external_source) VALUES (?, ?, ?)',
+  );
   const vocabKeys = [...new Set([...symbols.values()].map((s) => s.vocabulary))].sort();
   for (const [i, vocabulary] of vocabKeys.entries()) {
     vocabIds.set(vocabulary, i + 1);
-    insertVocab.run(i + 1, vocabulary);
+    insertVocab.run(i + 1, vocabulary, EXTERNAL.get(vocabulary)?.source ?? null);
   }
 
   const insertNs = db.prepare(
@@ -275,6 +302,21 @@ export function writeSymbols(db, parsed, universe) {
         profileIds.get(profile.key),
         schema.targetNamespace,
         prefixes.get(schema.targetNamespace) ?? null,
+      );
+    }
+    // An external vocabulary has no schema file of its own to contribute a
+    // row above, but it does have a namespace — in exactly the profiles that
+    // reference it.
+    for (const [vocabulary, {uri}] of EXTERNAL) {
+      const referenced = [...symbols.values()].some(
+        (s) => s.vocabulary === vocabulary && s.profiles.has(profile.key),
+      );
+      if (!referenced) continue;
+      insertNs.run(
+        vocabIds.get(vocabulary),
+        profileIds.get(profile.key),
+        uri,
+        prefixes.get(uri) ?? null,
       );
     }
   }
@@ -340,11 +382,25 @@ export function writeSymbols(db, parsed, universe) {
  * and lets an answer teach the unambiguous name.
  *
  * The bar for a row: real traffic, and a citation someone can go and check.
- * Seven vocabularies are still NULL after this and should stay that way until
+ * Nine vocabularies are still NULL after this and should stay that way until
  * one of them fails the same way `sml` did — a plausible guess is worth less
- * than a missing answer, because a wrong prefix resolves to something.
+ * than a missing answer, because a wrong prefix resolves to something. Two of
+ * the nine are `[Content_Types].xml` and `.rels`, which packages write on the
+ * default namespace, so there is no prefix in the wild to record.
  */
 const PREFIX_ALIASES = [
+  {
+    vocabulary: 'opc-coreProperties',
+    prefix: 'cp',
+    source:
+      'every docProps/core.xml Word, Excel and PowerPoint write: <cp:coreProperties xmlns:cp="…/package/2006/metadata/core-properties">',
+  },
+  {
+    vocabulary: 'opc-digSig',
+    prefix: 'mdssi',
+    source:
+      'the package signature parts Office writes: <mdssi:SignatureTime xmlns:mdssi="…/package/2006/digital-signature">',
+  },
   {
     vocabulary: 'dml-chart',
     prefix: 'c',

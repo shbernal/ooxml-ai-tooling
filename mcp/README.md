@@ -77,6 +77,13 @@ left as it is. Answers come back in the canonical spelling, so `x:worksheet`
 resolves and replies `sml:worksheet`; `x` is also VML's excel namespace, and
 printing both as `x:` would render two different namespaces identically.
 
+The same goes for the package parts, which every tool covers in both profiles:
+`cp:` for core properties and `mdssi:` for signatures, with
+`[Content_Types].xml` and `.rels` reached by bare name or vocabulary key, since
+packages write them on the default namespace. Their `dc:`/`dcterms:` children
+are Dublin Core, which ECMA-376 references without defining. Those come back
+untyped, with an `external_source` that says where they really are defined.
+
 This is what lets `ooxml_explain` take a spreadsheet diagnostic as the validator
 emits it — `/x:worksheet[1]/x:pageSetup[1]` — without anything in between.
 

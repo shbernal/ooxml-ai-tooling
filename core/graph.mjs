@@ -107,6 +107,17 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
   const display = (row) => formatQName(row.vocabulary, row.local_name, index);
 
   /**
+   * Where a vocabulary ECMA-376 only references is really defined, or null.
+   * Carried on every answer about one of its symbols, because "no type" from
+   * such a symbol means "not recorded here", not "has none".
+   */
+  const externalSource = (vocabularyKey) => index.byKey.get(vocabularyKey)?.externalSource ?? null;
+  const externalNote = (vocabularyKey) => {
+    const source = externalSource(vocabularyKey);
+    return source === null ? {} : {external_source: source};
+  };
+
+  /**
    * A stored reference, rewritten for a reader.
    *
    * The database spells references `vocabularyKey:localName` (`wml:CT_P`)
@@ -146,6 +157,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       profiles: symbolProfiles(row.id),
       scope: owner === null ? 'global' : {declared_in: display(owner)},
       type: describeType(row.type_ref, row.type_symbol_id),
+      ...externalNote(row.vocabulary),
     };
   }
 
@@ -404,12 +416,16 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     const declarations = matches.filter((r) => r.type_symbol_id !== null);
     if (declarations.length === 0) {
       const builtin = matches.find((r) => r.type_ref !== null);
+      const external = matches.find((r) => externalSource(r.vocabulary) !== null);
       return {
         found: false,
         reason: 'no_content_model',
         message: builtin
           ? `${qname} has type ${displayRef(builtin.type_ref)}, a built-in with no element content.`
-          : `${qname} declares no type, so it has no children in the schema.`,
+          : external
+            ? `${display(external)} is defined outside ECMA-376, and its type is not recorded here. ` +
+              `Defined in: ${externalSource(external.vocabulary)}`
+            : `${qname} declares no type, so it has no children in the schema.`,
       };
     }
 
@@ -870,9 +886,15 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     const describe = (target) => {
       if (target.symbolId === null) {
         if (target.row.type_ref === null) {
+          const source = externalSource(target.row.vocabulary);
           return {
             type: null,
-            message: `${display(target.row)} declares no type, so it has no value space in the schema.`,
+            message:
+              source === null
+                ? `${display(target.row)} declares no type, so it has no value space in the schema.`
+                : `${display(target.row)} is defined outside ECMA-376, and its type is not ` +
+                  `recorded here. Defined in: ${source}`,
+            ...(source === null ? {} : {external_source: source}),
           };
         }
         const name = targetName(target);
@@ -973,6 +995,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
             prefix: ns.prefix,
             profile: ns.profile,
             ...(aliases.length === 0 ? {} : {aliases}),
+            ...externalNote(vocabulary.key),
           });
         }
       }
@@ -1151,7 +1174,9 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     if (perProfile[a].namespace !== perProfile[b].namespace) {
       notes.push('namespace URI differs (expected — the profiles alias the same vocabulary)');
     }
-    return notes.length === 0 ? ['identical apart from the namespace URI'] : notes;
+    // Only reachable with one URI for both profiles, which is the packaging
+    // vocabularies: OPC was never split into Transitional and Strict.
+    return notes.length === 0 ? ['identical, namespace URI included'] : notes;
   }
 
   return {

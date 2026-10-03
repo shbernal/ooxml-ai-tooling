@@ -20,14 +20,24 @@ import {buildNamespaceIndex, listSchemaFiles} from './parse.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Bumped on any change to build/schema.sql. core/ refuses a database it does not know. */
-export const USER_VERSION = 1;
+export const USER_VERSION = 2;
 
 /** 'OOX1' as a big-endian int32 — `file`-style magic for a SQLite payload. */
 export const APPLICATION_ID = 0x4f4f5831;
 
+/**
+ * Part 2's packaging schemas belong to both profiles. A Strict package and a
+ * Transitional one write the same `[Content_Types].xml`, the same `.rels` and
+ * the same core properties, under the same namespace URIs — OPC was never split
+ * — so the one `opc/` set is read into each.
+ */
 const PROFILES = [
-  {key: 'transitional', label: 'ECMA-376 Part 4 — Transitional', dir: 'schemas/ooxml-transitional'},
-  {key: 'strict', label: 'ECMA-376 Part 1 — Strict', dir: 'schemas/ooxml-strict'},
+  {
+    key: 'transitional',
+    label: 'ECMA-376 Part 4 — Transitional',
+    dirs: ['schemas/ooxml-transitional', 'schemas/opc'],
+  },
+  {key: 'strict', label: 'ECMA-376 Part 1 — Strict', dirs: ['schemas/ooxml-strict', 'schemas/opc']},
 ];
 
 /**
@@ -74,11 +84,11 @@ export function buildDatabase(outputPath, {profiles = PROFILES, quiet = false} =
   db.exec(`PRAGMA application_id = ${APPLICATION_ID}`);
   db.exec(`PRAGMA user_version = ${USER_VERSION}`);
 
-  const dirs = profiles.map((profile) => join(ROOT, profile.dir));
+  const dirs = profiles.flatMap((profile) => profile.dirs.map((dir) => join(ROOT, dir)));
   const namespaceIndex = buildNamespaceIndex(dirs);
   const withFiles = profiles.map((profile) => ({
     ...profile,
-    files: listSchemaFiles(join(ROOT, profile.dir)),
+    files: profile.dirs.flatMap((dir) => listSchemaFiles(join(ROOT, dir))),
   }));
 
   log(`parsing ${withFiles.map((p) => `${p.files.length} ${p.key}`).join(', ')} schemas`);

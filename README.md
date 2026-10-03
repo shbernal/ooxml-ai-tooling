@@ -36,7 +36,8 @@ closed set of six.
 The other questions it answers: what may go inside an element **and in what
 order**, which namespace or prefix to write, what changes between the
 Transitional and Strict profiles, and — given a validation error — what *would*
-have been legal at that position.
+have been legal at that position. The package parts are covered too:
+`[Content_Types].xml`, `.rels` and `docProps/core.xml`.
 
 ## Which surface do I want?
 
@@ -85,7 +86,8 @@ Being clear about the gaps is more useful than pretending they are not there.
 
 `schemas/` holds 51 ECMA-376 XSDs vendored verbatim, with their archive
 checksums recorded in `schemas/PROVENANCE.md`. `build/` turns them into a
-2.2 MB SQLite graph — 5,606 symbols, both profiles — and the build is
+2.2 MB SQLite graph — 5,649 symbols, both profiles, the Part 2 packaging
+schemas included — and the build is
 deterministic: CI rebuilds it from the schemas and compares a canonical dump, so
 the committed database is a derived artifact rather than an assertion.
 

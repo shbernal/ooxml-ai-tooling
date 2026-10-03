@@ -32,6 +32,44 @@ const XML_NS = 'http://www.w3.org/XML/1998/namespace';
  */
 const FOREIGN_PREFIXES = ['xsd', 'xml'];
 
+/**
+ * Namespaces ECMA-376 references but does not define, keyed by URI.
+ *
+ * Exactly one file needs this: Part 2's core-properties schema builds
+ * `cp:coreProperties` mostly out of Dublin Core elements — `dc:title`,
+ * `dc:creator`, `dcterms:created` — and imports their schemas from
+ * dublincore.org by URL. Those schemas are not ECMA-376 and are not vendored
+ * (`AGENTS.md`: ECMA-376 and nothing else), but dropping the references would
+ * leave the most-used part of `docProps/core.xml` missing from its own content
+ * model.
+ *
+ * So the referenced elements are recorded and nothing more: a symbol per name
+ * actually referenced, no type, and a vocabulary that says where it is really
+ * defined. That is the honest size of what this repo knows about them.
+ */
+export const EXTERNAL_VOCABULARIES = new Map([
+  [
+    'http://purl.org/dc/elements/1.1/',
+    {
+      key: 'dc',
+      source:
+        'Dublin Core Metadata Element Set 1.1 (dublincore.org dc.xsd), imported by ' +
+        'opc-coreProperties.xsd. Not part of ECMA-376: only the elements ECMA-376 references ' +
+        'are recorded, without their types.',
+    },
+  ],
+  [
+    'http://purl.org/dc/terms/',
+    {
+      key: 'dcterms',
+      source:
+        'DCMI Metadata Terms (dublincore.org dcterms.xsd), imported by opc-coreProperties.xsd. ' +
+        'Not part of ECMA-376: only the elements ECMA-376 references are recorded, without ' +
+        'their types.',
+    },
+  ],
+]);
+
 export const isForeign = (qname) =>
   qname !== null && qname !== undefined && FOREIGN_PREFIXES.some((p) => qname.startsWith(`${p}:`));
 
@@ -48,6 +86,7 @@ export const isForeign = (qname) =>
  */
 export function buildNamespaceIndex(profileDirs) {
   const byUri = new Map(); // uri -> vocabulary key
+  for (const [uri, external] of EXTERNAL_VOCABULARIES) byUri.set(uri, external.key);
   for (const dir of profileDirs) {
     for (const file of listSchemaFiles(dir)) {
       const {targetNamespace, vocabulary} = readSchemaHeader(file);

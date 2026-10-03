@@ -53,12 +53,16 @@ largest difference between the profiles.
 Note the date: Part 2's 5th edition is **December 2021**, not December 2016 like
 Parts 1 and 4. The `…december_2016` URL for Part 2 does not exist.
 
-**Vendored ahead of use, and not ingested.** `[Content_Types].xml` and `.rels`
-are where a large share of real-world OOXML bugs live, but nothing queries them
-yet. They are small and stable, so vendoring now costs ~9 KB and saves repeating
-this exercise when the package-inspection tool arrives. Unlike the other two
-sets these carry a UTF-8 BOM, which an ingest will have to strip rather than
-treat as document content.
+Ingested into **both** profiles: Part 2 was never split into Transitional and
+Strict, so a package of either kind writes `[Content_Types].xml`, `.rels` and
+`docProps/core.xml` under these same namespace URIs. Three of the four files
+carry a UTF-8 BOM, which the parser strips rather than treating as document
+content.
+
+`opc-coreProperties.xsd` imports two Dublin Core schemas from dublincore.org by
+URL. Those are **not** vendored — they are not ECMA-376 — so the ingest records
+only the `dc:` and `dcterms:` elements the core-properties schema references,
+untyped, in vocabularies marked with where they are really defined.
 
 ## Licensing
 

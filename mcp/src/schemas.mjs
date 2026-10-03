@@ -93,6 +93,13 @@ const SYMBOL_KIND = z.enum([
 ]);
 const NULLABLE_STRING = z.string().nullable();
 const STRINGS = z.array(z.string());
+const EXTERNAL_SOURCE = z
+  .string()
+  .optional()
+  .describe(
+    'Only on a vocabulary ECMA-376 references without defining (Dublin Core): where it is ' +
+      'really defined. Its symbols carry no type here.',
+  );
 
 /** Why a name did not resolve. The next action differs per reason. */
 const LOOKUP_MISS = ['unknown_vocabulary', 'not_in_profile', 'unknown_symbol'];
@@ -133,6 +140,7 @@ const SYMBOL = {
   profiles: z.array(PROFILE),
   scope: z.union([z.literal('global'), z.strictObject({declared_in: z.string()})]),
   type: TYPE_REF.nullable(),
+  external_source: EXTERNAL_SOURCE,
 };
 
 /** How an ambiguous answer is shaped, whatever it is ambiguous about. */
@@ -373,6 +381,7 @@ const VALUE_ANSWER = {
   type: NULLABLE_STRING,
   builtin: TRUE.optional(),
   message: MESSAGE.optional(),
+  external_source: EXTERNAL_SOURCE,
   ...VALUE_SPACE,
 };
 
@@ -397,6 +406,7 @@ export const NAMESPACE = oneOf('ooxml_namespace: matching namespaces, in every p
         prefix: NULLABLE_STRING,
         profile: PROFILE,
         aliases: z.array(z.strictObject({prefix: z.string(), source: z.string()})).optional(),
+        external_source: EXTERNAL_SOURCE,
       }),
     ),
   }),

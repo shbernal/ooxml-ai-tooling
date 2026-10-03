@@ -440,3 +440,70 @@ describe('diff_profiles', () => {
     assert.deepEqual(result.symbols[0].absent_from, ['strict']);
   });
 });
+
+describe('the packaging vocabularies', () => {
+  const CONTENT_TYPES = 'http://schemas.openxmlformats.org/package/2006/content-types';
+
+  test('are in both profiles, under one URI', () => {
+    for (const profile of ['transitional', 'strict']) {
+      const types = graph.element(`{${CONTENT_TYPES}}Types`, {profile});
+      assert.equal(types.found, true, profile);
+      assert.equal(types.symbols[0].namespace.uri, CONTENT_TYPES);
+    }
+    assert.deepEqual(graph.diff_profiles('opc-contentTypes:Types').symbols[0].differences, [
+      'identical, namespace URI included',
+    ]);
+  });
+
+  test('answer what a [Content_Types].xml may hold', () => {
+    const types = graph.children('opc-contentTypes:Types');
+    assert.deepEqual(
+      types.order.map((entry) => entry.qname),
+      ['opc-contentTypes:Default', 'opc-contentTypes:Override'],
+    );
+    const override = graph.attributes('opc-contentTypes:Override');
+    assert.deepEqual(
+      override.attributes.map((a) => [a.name, a.use]),
+      [
+        ['ContentType', 'required'],
+        ['PartName', 'required'],
+      ],
+    );
+  });
+
+  test('answer what a .rels relationship takes', () => {
+    const relationship = graph.attributes('Relationship');
+    assert.deepEqual(
+      relationship.attributes.map((a) => a.name),
+      ['Id', 'Target', 'TargetMode', 'Type'],
+    );
+    assert.deepEqual(graph.enum('ST_TargetMode').values, ['External', 'Internal']);
+  });
+
+  test('cp and mdssi resolve, as Office writes them', () => {
+    assert.equal(graph.element('cp:coreProperties').found, true);
+    assert.equal(graph.element('mdssi:SignatureTime').found, true);
+  });
+});
+
+describe('Dublin Core, which ECMA-376 references without defining', () => {
+  test('its elements are in the core-properties content model', () => {
+    const order = graph.children('cp:coreProperties').order.map((entry) => entry.qname);
+    for (const name of ['dc:title', 'dc:creator', 'dcterms:created', 'dcterms:modified']) {
+      assert.ok(order.includes(name), name);
+    }
+  });
+
+  test('each says where it is really defined instead of claiming it has no type', () => {
+    const creator = graph.element('dc:creator').symbols[0];
+    assert.equal(creator.type, null);
+    assert.match(creator.external_source, /Dublin Core/);
+    const values = graph.values('dcterms:created');
+    assert.match(values.message, /outside ECMA-376/);
+    assert.doesNotMatch(values.message, /declares no type/);
+  });
+
+  test('an ECMA-376 symbol carries no external_source', () => {
+    assert.equal('external_source' in graph.element('w:tbl').symbols[0], false);
+  });
+});

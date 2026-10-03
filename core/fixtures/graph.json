@@ -383,15 +383,15 @@
     "distinct_types": 3
   },
   "row counts": {
-    "symbols": 5606,
+    "symbols": 5649,
     "anonymous": 2,
-    "compositors": 2011,
-    "child_edges": 6620,
+    "compositors": 2021,
+    "child_edges": 6662,
     "group_edges": 510,
-    "attr_edges": 6199,
-    "inheritance_edges": 1117,
-    "enums": 6273,
-    "simple_type_facets": 246,
+    "attr_edges": 6223,
+    "inheritance_edges": 1135,
+    "enums": 6277,
+    "simple_type_facets": 254,
     "union_members": 238
   }
 }

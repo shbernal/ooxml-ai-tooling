@@ -58,7 +58,7 @@ export function loadVocabularyIndex(db) {
   const byUri = new Map();
 
   const rows = db.all(
-    `SELECT v.id, v.key, n.uri, n.preferred_prefix, p.key AS profile
+    `SELECT v.id, v.key, v.external_source, n.uri, n.preferred_prefix, p.key AS profile
        FROM vocabularies v
        JOIN namespaces n ON n.vocabulary_id = v.id
        JOIN profiles p ON p.id = n.profile_id
@@ -72,7 +72,13 @@ export function loadVocabularyIndex(db) {
 
   for (const row of rows) {
     if (!byKey.has(row.key)) {
-      byKey.set(row.key, {id: row.id, key: row.key, namespaces: [], aliasPrefixes: []});
+      byKey.set(row.key, {
+        id: row.id,
+        key: row.key,
+        externalSource: row.external_source,
+        namespaces: [],
+        aliasPrefixes: [],
+      });
     }
     byKey
       .get(row.key)

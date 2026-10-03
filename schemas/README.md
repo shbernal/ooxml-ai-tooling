@@ -6,7 +6,7 @@ came from and how to reproduce the extraction.
 ```
 ooxml-transitional/  26 files  Part 4, Transitional — what Office emits
 ooxml-strict/        21 files  Part 1, Strict — no VML
-opc/                  4 files  Part 2, Open Packaging Conventions — not ingested
+opc/                  4 files  Part 2, Open Packaging Conventions — read into both profiles
 ```
 
 ## These are build input, not a runtime path
