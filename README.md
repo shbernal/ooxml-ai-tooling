@@ -1,132 +1,171 @@
-# ooxml-ai-tooling
+<div align="center">
 
-The ECMA-376 (Office Open XML) schema, as structured data an AI agent can query
-— **locally, offline, with no account and no network call**.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+  <img alt="OOXML AI Tooling" src="assets/banner-light.svg" width="640">
+</picture>
 
-Two surfaces over one core:
+Ask the ECMA-376 schema what is legal in a `.docx`, `.xlsx` or `.pptx`, offline.
 
-- **`ooxml-lookup`** — an agent skill: a CLI for any agent with a shell.
-- **`mcp-server-ooxml`** — an MCP server over stdio, for MCP clients.
+[![npm](https://img.shields.io/npm/v/mcp-server-ooxml?style=flat-square&label=mcp-server-ooxml&color=F25022)](https://www.npmjs.com/package/mcp-server-ooxml)
+[![CI](https://img.shields.io/github/actions/workflow/status/shbernal/ooxml-ai-tooling/ci.yml?branch=main&style=flat-square&label=CI&color=7FBA00)](https://github.com/shbernal/ooxml-ai-tooling/actions/workflows/ci.yml)
+[![Node](https://img.shields.io/badge/node-%3E%3D24-00A4EF?style=flat-square)](.nvmrc)
+[![License](https://img.shields.io/github/license/shbernal/ooxml-ai-tooling?style=flat-square&color=FFB900)](LICENSE)
 
-> **Status: `0.0.x`.** `mcp-server-ooxml` is on npm; the skill is not released
-> yet. Neither surface is frozen — expect breaking changes without a
-> deprecation period until `0.1.0`.
+---
 
-## What it answers
+[Install](#install) • [Quickstart](#quickstart) • [Why?](#why) • [How it works](#how-it-works) • [Not this project](#not-this-project)
 
-You are hand-writing a paragraph in a `.docx` and want to indent it. What
-attributes does `w:ind` take, and what may you write in them?
+---
 
-```console
-$ ooxml attributes w:CT_Ind
-{"type":"w:CT_Ind","count":12,"attributes":[
-  {"name":"firstLine","qualified":true,"use":"optional",
-   "type":{"qname":"s:ST_TwipsMeasure","kind":"simpleType"}}, …]}
+</div>
 
-$ ooxml values s:ST_TwipsMeasure
-{"type":"s:ST_TwipsMeasure","one_of":[
-  {"type":"s:ST_UnsignedDecimalNumber","base":"xsd:unsignedLong"},
-  {"type":"s:ST_PositiveUniversalMeasure",
-   "facets":{"pattern":"[0-9]+(\\.[0-9]+)?(mm|cm|in|pt|pc|pi)"}}]}
+<!--
+  Demo goes here. Record with VHS (https://github.com/charmbracelet/vhs):
+  an agent hits a validator error on w:ind, runs `ooxml explain` on it, then
+  `ooxml values s:ST_TwipsMeasure`, and writes w:firstLine="0.5in".
+  Export light and dark variants and switch them with <picture>.
+-->
+
+An AI agent writing Office markup by hand has to guess what the schema allows, and it usually guesses wrong.
+This project gives it the ECMA-376 schema as a local SQLite graph it can query instead.
+It ships two ways: an agent skill for agents with a shell, and an MCP server for MCP clients.
+
+- **Children in schema order**, with cardinality and the full sequence/choice tree.
+- **Attributes and their value space**: inherited attributes, enumerations, patterns, bounds and unions.
+- **Validator errors explained**: paste a diagnostic and get back what would have been legal at that position.
+- **Transitional and Strict**: answers for either profile, and a diff of what Transitional adds.
+- **Every vocabulary**: wordprocessingml, spreadsheetml, presentationml, drawingml, VML and the package parts (`[Content_Types].xml`, `.rels`, `docProps/core.xml`).
+- **Local and deterministic**: no account, no network call, no API key.
+
+## Install
+
+Both surfaces need Node 24 or newer.
+
+### MCP server
+
+Add it to your MCP client's config. The database ships inside the npm package, so there is nothing to download on first run.
+
+```json
+{
+  "mcpServers": {
+    "ooxml": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-ooxml"]
+    }
+  }
+}
 ```
 
-So `w:firstLine="720"` or `w:firstLine="0.5in"` — and the unit suffixes are a
-closed set of six.
+### Agent skill
 
-The other questions it answers: what may go inside an element **and in what
-order**, which namespace or prefix to write, what changes between the
-Transitional and Strict profiles, and — given a validation error — what *would*
-have been legal at that position. The package parts are covered too:
-`[Content_Types].xml`, `.rels` and `docProps/core.xml`.
+Install `ooxml-lookup` into your agent's skills directory:
 
-## Which surface do I want?
+```bash
+npx skills add shbernal/ooxml-ai-tooling
+```
 
-| Your situation | Use | Why |
-|---|---|---|
-| An agent with a shell (Claude Code, Codex, Cursor's terminal) | **the skill** | No install, no config. It also exposes read-only SQL over the graph, which the MCP surface does not. |
-| An MCP client (Claude Desktop, an editor's MCP integration) | **the MCP server** | `npx -y mcp-server-ooxml`. The database ships in the package. |
-| A cloud session with no filesystem and no MCP | **neither** | Both surfaces need a local process. There is nothing to be done about this and pretending otherwise would waste your time. |
+Also published on [ClawHub](https://clawhub.ai/shbernal/skills/ooxml-lookup).
 
-Both answer identically — they are thin adapters over one core, kept
-byte-identical by `make check-vendor`.
+### Which one?
 
-## Why this exists
+| Your agent | Use |
+| --- | --- |
+| Has a shell, like Claude Code or Codex | The skill. It also offers read-only SQL over the graph. |
+| Speaks MCP, like Claude Desktop | The MCP server. |
+| Runs in the cloud with no filesystem and no MCP | Neither. Both need a local process. |
 
-[`superdoc-dev/ooxml-dev`](https://github.com/superdoc-dev/ooxml-dev) is the
-incumbent and good prior art — its data model informed the shape of ours. But
-its MCP server is a **thin client of a hosted service**: `api.ooxml.dev/mcp`,
-backed by Postgres + pgvector behind an authentication requirement, with usage
-metering. There is no local mode, and its ingest cannot produce one without
-Postgres, pgvector and an embedding model.
+The two return identical answers. Both are thin adapters over one shared core.
 
-This is not a clone of it. It is the half that **can** be fully local,
-deterministic and offline — the XSD graph — built from committed schemas into a
-committed SQLite database, queried by a core with zero runtime dependencies.
+## Quickstart
+
+Say you are hand-writing a paragraph in a `.docx` and want to indent it.
+
+1. Ask what attributes `w:ind` takes:
+
+   ```console
+   $ ooxml attributes w:CT_Ind
+   {"type":"w:CT_Ind","count":12,"attributes":[
+     {"name":"firstLine","qualified":true,"use":"optional",
+      "type":{"qname":"s:ST_TwipsMeasure","kind":"simpleType"}}, …]}
+   ```
+
+2. Ask what values `firstLine` accepts:
+
+   ```console
+   $ ooxml values s:ST_TwipsMeasure
+   {"type":"s:ST_TwipsMeasure","one_of":[
+     {"type":"s:ST_UnsignedDecimalNumber","base":"xsd:unsignedLong"},
+     {"type":"s:ST_PositiveUniversalMeasure",
+      "facets":{"pattern":"[0-9]+(\\.[0-9]+)?(mm|cm|in|pt|pc|pi)"}}]}
+   ```
+
+   So `w:firstLine="720"` and `w:firstLine="0.5in"` are both legal, and the units are a closed set of six.
+
+3. Got a validation error instead? Hand it over as-is:
+
+   ```console
+   $ ooxml explain "Sch_UndeclaredAttribute: The 'bogus' attribute is not declared. at /w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]"
+   {"resolved":true,"finding":{"kind":"undeclared_attribute","name":"bogus"},
+    "message":"The 'bogus' attribute is not allowed on w:ind. Its legal attributes are listed below.", …}
+   ```
+
+The skill runs these as `node scripts/ooxml.mjs <command>`.
+The MCP server exposes the same questions as `ooxml_attributes`, `ooxml_values`, `ooxml_explain` and seven more.
+See [`skill/SKILL.md`](skill/SKILL.md) for the CLI and [`mcp/README.md`](mcp/README.md) for the tool list.
+
+## Why?
+
+A schema browser that reads the XSDs naively gives confident wrong answers. These are the cases it gets wrong:
+
+| Question | Naive answer | This project |
+| --- | --- | --- |
+| What goes inside a DrawingML type whose content is a group reference? | Nothing | The expanded group |
+| Children of a type that extends a base | Its own children only | Base children first, each tagged with the type that contributed it |
+| What is `w:tblPr`? | One content model | Both, each labelled with where it applies |
+| Values of bare `ST_Direction` | One of them | All three: `ltr\|rtl` (wml), `horz\|vert` (pml), `norm\|rev` (dml-diagram) |
+| Is `x:worksheet` valid input? | No prefix is bound in the schema | Yes, resolved as `sml:worksheet` |
+
+The closest existing project is [`superdoc-dev/ooxml-dev`](https://github.com/superdoc-dev/ooxml-dev), and it is good prior art.
+The difference is where it runs:
+
+| | ooxml-dev | ooxml-ai-tooling |
+| --- | --- | --- |
+| Runs | Hosted service at `api.ooxml.dev/mcp` | On your machine |
+| Account | Required | None |
+| Network | Every query | Never |
+| Spec prose and semantic search | Yes | No |
+| Agent skill for shell-only agents | No | Yes |
+
+If your question is "what does the spec say about X", use ooxml.dev.
+If it is "what is structurally legal here", use this.
+
+## How it works
+
+```mermaid
+flowchart LR
+  xsd["51 ECMA-376 XSDs<br/>vendored, checksummed"] --> build["build/<br/>ingest"]
+  build --> db[("ooxml.db<br/>2.2 MB SQLite<br/>5,649 symbols")]
+  db --> core["core/<br/>zero runtime deps"]
+  core --> skill["ooxml-lookup<br/>agent skill"]
+  core --> mcp["mcp-server-ooxml<br/>stdio MCP server"]
+```
+
+- The repo vendors the schemas byte-for-byte, with checksums in [`schemas/PROVENANCE.md`](schemas/PROVENANCE.md).
+- The build is deterministic. CI rebuilds the database and compares a canonical dump against the committed copies.
+- The graph keys symbols on the vocabulary, not the namespace URI. Transitional and Strict are one vocabulary under two sets of URIs, so "is this in Strict too?" is a join, not a guess.
+- The core uses only Node builtins like `node:sqlite`, which is why the skill runs from a bare checkout.
 
 ## Not this project
 
-Being clear about the gaps is more useful than pretending they are not there.
+- **Validating a file.** That is [`ooxml-validate`](https://github.com/shbernal/ooxml-validate), which wraps Microsoft's `OpenXmlValidator`. This project never opens your document. `explain` reads a validator's diagnostic and answers from the schema.
+- **Reading the specification text.** No prose, no PDFs, no embeddings. [ooxml.dev](https://ooxml.dev) does that.
+- **What Word or Excel actually do.** Implementations diverge from the standard, and this project does not model those divergences.
 
-- **Validating a file** — that is [`ooxml-validate`](https://github.com/shbernal/ooxml-validate),
-  a sibling project that wraps Microsoft's `OpenXmlValidator`. This repo answers
-  *what is legal*; it never opens your document, and it will never grow a second
-  validation path. The `explain` tool *consumes* a diagnostic from a validator
-  report and turns it into a schema answer — nothing is imported and nothing
-  needs installing for that.
-- **Reading the specification text** — no prose, no PDFs, no embeddings, no
-  semantic search. <https://ooxml.dev> does that and does it well. If your
-  question is "what does the spec say about X" rather than "what is structurally
-  legal here", go there; it is a genuine recommendation, not a footnote.
-- **What Word actually does** — the schema is the standard, and implementations
-  diverge from it. Those divergences are not modelled here, deliberately: the
-  readily available corpus is xlsx-shaped and would bias a tool that has to
-  serve wordprocessingml, spreadsheetml, presentationml and drawingml equally.
+## More
 
-## How it is built
+- [`mcp/README.md`](mcp/README.md): MCP tools, prefixes and profiles.
+- [`skill/SKILL.md`](skill/SKILL.md): the CLI and how an agent should use it.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): building the database and running the checks.
 
-`schemas/` holds 51 ECMA-376 XSDs vendored verbatim, with their archive
-checksums recorded in `schemas/PROVENANCE.md`. `build/` turns them into a
-2.2 MB SQLite graph — 5,649 symbols, both profiles, the Part 2 packaging
-schemas included — and the build is
-deterministic: CI rebuilds it from the schemas and compares a canonical dump, so
-the committed database is a derived artifact rather than an assertion.
-
-The graph keys symbols on the **vocabulary**, not the namespace URI. That is the
-decision everything else rests on: Transitional and Strict are the same
-vocabulary under different URIs, so keying on the URI would double every symbol
-and make "is this in Strict too?" unanswerable. Keyed on the vocabulary, it is a
-join.
-
-```
-core/     the implementation and its tests — the only real source
-schemas/  vendored ECMA-376 XSDs + PROVENANCE.md
-build/    XSD -> SQLite ingest (build-time only, never shipped)
-skill/    SKILL.md, a CLI, and a vendored copy of the core
-mcp/      the mcp-server-ooxml npm package, a thin adapter over the core
-```
-
-## Development
-
-```bash
-pnpm install
-make db             # build core/data/ooxml.db from schemas/
-pnpm run verify     # lint + typecheck + schema manifest + tests + smoke
-make sync-core      # copy the core into both surfaces after any core change
-make check-vendor   # fail if a vendored copy has drifted
-make smoke          # drive the MCP server over real stdio JSON-RPC
-```
-
-`AGENTS.md` has the conventions, the scope boundary and the vendoring rule.
-
-## Credit and licensing
-
-`superdoc-dev/ooxml-dev` is prior art; its `db/schema.sql` informed the shape of
-this graph. **No code is shared** — its README carries an MIT badge but the
-repository has no LICENSE file and GitHub's license API returns 404, which is
-why the ingest here is an independent implementation rather than a borrowing.
-
-The vendored ECMA-376 schemas are redistributed unmodified under Ecma
-International's free-availability terms and Microsoft's Open Specification
-Promise. This does not affect the MIT license on this project's own code.
-
-MIT © shbernal
+The vendored ECMA-376 schemas are redistributed unmodified under Ecma International's free-availability terms and Microsoft's Open Specification Promise.
