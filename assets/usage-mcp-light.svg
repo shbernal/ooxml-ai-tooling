@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 476" width="800" height="476" xml:space="preserve" role="img" aria-label="An agent is given a validator error, calls the ooxml_explain MCP tool, and removes the undeclared attribute.">
+<title>An agent is given a validator error, calls the ooxml_explain MCP tool, and removes the undeclared attribute.</title>
+<style>
+text{font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', monospace;font-size:13.5px;white-space:pre}
+.b{font-weight:700}
+.bg{fill:#ffffff}.bar{fill:#f6f8fa}.border{fill:#d0d7de}.fg{fill:#1f2328}.muted{fill:#656d76}.faint{fill:#8c959f}.box{fill:#f6f8fa}.blue{fill:#0969da}.green{fill:#1a7f37}.yellow{fill:#9a6700}.red{fill:#cf222e}.accent{fill:#0078d4}.addBg{fill:#dafbe1}
+@keyframes a0{0%,1.88%{opacity:0;transform:translateY(4px)}3.44%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a0{animation:a0 16s linear infinite}
+@keyframes a1{0%,10.00%{opacity:0;transform:translateY(4px)}11.56%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a1{animation:a1 16s linear infinite}
+@keyframes a2{0%,12.50%{opacity:0;transform:translateY(4px)}14.06%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a2{animation:a2 16s linear infinite}
+.run{opacity:0;animation:run 16s linear infinite}@keyframes run{0%,16.25%{opacity:0}17.50%,22.50%{opacity:1}22.81%,100%{opacity:0}}
+@keyframes a3{0%,23.13%{opacity:0;transform:translateY(4px)}24.69%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a3{animation:a3 16s linear infinite}
+@keyframes a4{0%,25.31%{opacity:0;transform:translateY(4px)}26.88%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a4{animation:a4 16s linear infinite}
+@keyframes a5{0%,27.50%{opacity:0;transform:translateY(4px)}29.06%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a5{animation:a5 16s linear infinite}
+@keyframes a6{0%,29.69%{opacity:0;transform:translateY(4px)}31.25%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a6{animation:a6 16s linear infinite}
+@keyframes a7{0%,31.87%{opacity:0;transform:translateY(4px)}33.44%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a7{animation:a7 16s linear infinite}
+@keyframes a8{0%,34.06%{opacity:0;transform:translateY(4px)}35.63%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a8{animation:a8 16s linear infinite}
+@keyframes a9{0%,36.25%{opacity:0;transform:translateY(4px)}37.81%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a9{animation:a9 16s linear infinite}
+@keyframes a10{0%,43.75%{opacity:0;transform:translateY(4px)}45.31%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a10{animation:a10 16s linear infinite}
+@keyframes a11{0%,46.25%{opacity:0;transform:translateY(4px)}47.81%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a11{animation:a11 16s linear infinite}
+@keyframes a12{0%,48.75%{opacity:0;transform:translateY(4px)}50.31%,95%{opacity:1;transform:none}98.5%,100%{opacity:0}}.a12{animation:a12 16s linear infinite}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<rect x="0.5" y="0.5" width="799" height="475" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+<path d="M0.5 36V10.5a10 10 0 0 1 10-10h779a10 10 0 0 1 10 10V36Z" fill="#f6f8fa"/>
+<line x1="0.5" y1="36" x2="799.5" y2="36" stroke="#d0d7de"/>
+<circle cx="20" cy="18.5" r="5.5" fill="#f25022"/><circle cx="38" cy="18.5" r="5.5" fill="#ffb900"/><circle cx="56" cy="18.5" r="5.5" fill="#7fba00"/>
+<text x="400" y="23" text-anchor="middle" class="muted" style="font-size:12px">agent · mcp: ooxml</text>
+<g class="a0"><rect x="24" y="52" width="752" height="66" rx="8" fill="#f6f8fa" stroke="#d0d7de"/><text x="40" y="70" class="fg"><tspan class="muted">you</tspan></text><text x="40" y="90" class="fg">Word won't open report.docx. The validator says:</text><text x="40" y="108" class="fg"><tspan class="red">Sch_UndeclaredAttribute: The 'bogus' attribute is not declared.</tspan></text></g>
+<g class="a1"><text x="24" y="150" class="fg"><tspan class="accent">●</tspan> <tspan class="muted">agent</tspan></text></g>
+<g class="a2"><rect x="24" y="160" width="752" height="226" rx="8" fill="#ffffff" stroke="#d0d7de"/><path d="M24.5 188V168a8 8 0 0 1 8-8h735a8 8 0 0 1 8 8V188Z" fill="#f6f8fa"/><text x="40" y="179" class="fg"><tspan class="muted">tool</tspan> <tspan class="accent">ooxml_explain</tspan><tspan class="muted">  (mcp-server-ooxml)</tspan></text><text x="40" y="208" class="fg"><tspan class="blue">id</tspan><tspan class="muted">: </tspan><tspan class="green">&quot;Sch_UndeclaredAttribute&quot;</tspan></text><text x="40" y="226" class="fg"><tspan class="blue">xpath</tspan><tspan class="muted">: </tspan><tspan class="green">&quot;/w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]&quot;</tspan></text><line x1="40" x2="760" y1="240" y2="240" stroke="#d0d7de"/></g>
+<g class="run"><text x="40" y="262" class="fg"><tspan class="muted">running…</tspan></text></g>
+<g class="a3"><text x="40" y="262" class="fg"><tspan class="blue">resolved</tspan><tspan class="muted">: </tspan><tspan class="green">true</tspan></text></g>
+<g class="a4"><text x="40" y="280" class="fg"><tspan class="blue">finding</tspan><tspan class="muted">: </tspan><tspan class="fg">undeclared_attribute </tspan><tspan class="red">&quot;bogus&quot;</tspan></text></g>
+<g class="a5"><text x="40" y="298" class="fg"><tspan class="blue">legal.resolved_from</tspan><tspan class="muted">: </tspan><tspan class="green">&quot;w:ind -&gt; w:CT_Ind&quot;</tspan></text></g>
+<g class="a6"><text x="40" y="316" class="fg"><tspan class="blue">message</tspan><tspan class="muted">: </tspan><tspan class="green">&quot;The 'bogus' attribute is not allowed on w:ind. …&quot;</tspan></text></g>
+<g class="a7"><text x="40" y="334" class="fg"><tspan class="blue">legal.attributes</tspan><tspan class="muted"> (12): </tspan><tspan class="fg">end endChars firstLine firstLineChars hanging hangingChars</tspan></text></g>
+<g class="a8"><text x="40" y="352" class="fg"><tspan class="muted">                       </tspan><tspan class="fg">left leftChars right rightChars start startChars</tspan></text></g>
+<g class="a9"><text x="40" y="370" class="fg"><tspan class="blue">firstLine</tspan><tspan class="muted">: </tspan><tspan class="fg">s:ST_TwipsMeasure</tspan><tspan class="muted">  optional</tspan></text></g>
+<g class="a10"><text x="24" y="412" class="fg"><tspan class="accent">●</tspan> <tspan class="muted">agent</tspan></text></g>
+<g class="a11"><text x="24" y="434" class="fg">w:bogus isn't an attribute of w:ind, so I removed it. For a first-line</text></g>
+<g class="a12"><text x="24" y="452" class="fg">indent the schema allows <tspan class="green">w:firstLine=&quot;720&quot;</tspan> (twips) or <tspan class="green">&quot;0.5in&quot;</tspan>.</text></g>
+</svg>

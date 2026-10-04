@@ -12,10 +12,11 @@ CORE_FILES := \
 
 VENDOR_DIRS := skill/scripts mcp/src
 
-.PHONY: db dump check-schemas sync-core check-vendor test verify smoke help
+.PHONY: db readme-art dump check-schemas sync-core check-vendor test verify smoke help
 
 help:
 	@echo "db            build core/data/ooxml.db from schemas/"
+	@echo "readme-art    render the README terminal illustrations into assets/"
 	@echo "dump          emit the canonical text serialisation of the database"
 	@echo "check-schemas verify the vendored XSDs against schemas/SHA256SUMS"
 	@echo "sync-core     copy the core modules and database into both surfaces"
@@ -29,6 +30,11 @@ help:
 # surfaces (see sync-core), because each is distributed on its own.
 db:
 	node build/build-db.mjs
+
+# The README's terminal illustrations. Their tool output is copied by hand from
+# real CLI runs, so rerun this after editing scripts/readme-art.mjs.
+readme-art:
+	node scripts/readme-art.mjs
 
 # The canonical text serialisation CI hashes. Its format is a contract — see the
 # header of build/dump.mjs before changing it.
