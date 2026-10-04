@@ -60,8 +60,8 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       return {parsed, vocabularies, rows: []};
     }
 
-    const clauses = ['s.local_name = ? COLLATE NOCASE'];
-    const params = [parsed.localName];
+    const clauses = [];
+    const params = [];
     if (vocabularies !== null) {
       clauses.push(`v.key IN (${vocabularies.map(() => '?').join(', ')})`);
       params.push(...vocabularies);
@@ -73,14 +73,22 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     }
     if (!includeAnonymous) clauses.push('s.is_anonymous = 0');
 
-    const rows = handle.all(
-      `SELECT s.id, s.local_name, s.kind, s.parent_symbol_id, s.type_ref, s.type_symbol_id,
-              s.is_anonymous, v.key AS vocabulary
-         FROM symbols s JOIN vocabularies v ON v.id = s.vocabulary_id
-        WHERE ${clauses.join(' AND ')}
-        ORDER BY s.parent_symbol_id, v.key, s.kind, s.id`,
-      ...params,
-    );
+    // XML names are case-sensitive, so the exact spelling wins outright: `Types`
+    // is the content-types root and `w:types` is an unrelated wml element, and
+    // folding case made them one ambiguous answer. Case is folded only when
+    // nothing matches exactly, so `tblpr` still finds `w:tblPr`.
+    const select = (nameClause) =>
+      handle.all(
+        `SELECT s.id, s.local_name, s.kind, s.parent_symbol_id, s.type_ref, s.type_symbol_id,
+                s.is_anonymous, v.key AS vocabulary
+           FROM symbols s JOIN vocabularies v ON v.id = s.vocabulary_id
+          WHERE ${[nameClause, ...clauses].join(' AND ')}
+          ORDER BY s.parent_symbol_id, v.key, s.kind, s.id`,
+        parsed.localName,
+        ...params,
+      );
+    const exact = select('s.local_name = ?');
+    const rows = exact.length > 0 ? exact : select('s.local_name = ? COLLATE NOCASE');
     return {parsed, vocabularies, rows};
   }
 
@@ -227,12 +235,14 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
    * several places *within* a vocabulary cannot be fixed that way: `w:tblPr` is
    * genuinely two content models and which applies depends on the parent, so
    * the answer has to carry both and say where each holds.
+   *
+   * It lists the matched *names*, not the resolved types: `a:p, sml:p, w:p` is
+   * what the caller can qualify with, `a:CT_TextParagraph` is not.
    */
   const ambiguityMessage = (qname, resolved, noun) =>
     resolved.ambiguity === 'vocabulary'
-      ? `"${qname}" names ${resolved.variants.length} unrelated symbols that share a local name: ` +
-        `${resolved.variants.map((v) => display(v.symbol)).join(', ')}. ` +
-        'Qualify the name to pick one.'
+      ? `"${qname}" names ${resolved.names.length} unrelated symbols that share a local name: ` +
+        `${resolved.names.join(', ')}. Qualify the name to pick one.`
       : `${qname} has ${resolved.variants.length} different ${noun} depending on where it appears.`;
 
   // ----------------------------------------------------------------- tools --
@@ -409,6 +419,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       return {
         found: true,
         ambiguity: 'vocabulary',
+        names: asType.map(display),
         variants: asType.map((symbol) => ({symbol, via: null, declaredIn: []})),
       };
     }
@@ -437,9 +448,16 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       byType.get(row.type_symbol_id).push(row);
     }
 
+    // Same-named elements in different vocabularies are unrelated — `p` is a:p,
+    // sml:p and w:p — so the caller fixes it by qualifying, not by looking at
+    // the parent. Only a name confined to one vocabulary varies by site.
+    const elementNames = [...new Set(declarations.map(display))];
+    const spansVocabularies = new Set(declarations.map((r) => r.vocabulary)).size > 1;
+
     return {
       found: true,
-      ambiguity: 'declaration_site',
+      ambiguity: spansVocabularies ? 'vocabulary' : 'declaration_site',
+      names: elementNames,
       variants: [...byType.entries()].map(([typeSymbolId, sites]) => ({
         symbol: symbolById(typeSymbolId),
         via: `${display(sites[0])} -> ${displayRef(sites[0].type_ref)}`,

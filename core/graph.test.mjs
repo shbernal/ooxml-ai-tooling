@@ -167,6 +167,29 @@ describe('children', () => {
     assert.equal(graph.children('p:CT_Shape').ambiguous, undefined);
   });
 
+  test('a bare element name shared across vocabularies says to qualify it', () => {
+    // a:p, sml:p and w:p are three unrelated elements. "Depends on where it
+    // appears" would send the caller looking at the parent, which cannot help.
+    const result = graph.children('p');
+    assert.equal(result.ambiguous, true);
+    assert.match(result.message, /Qualify the name/);
+    assert.match(result.message, /a:p, sml:p, w:p/);
+    assert.doesNotMatch(result.message, /depending on where it appears/);
+  });
+
+  test('matches the exact case before folding it', () => {
+    // `Types` is the content-types root; `w:types` is a wml element. XML names
+    // are case-sensitive, so the exact spelling is the only answer.
+    const result = graph.children('Types');
+    assert.equal(result.ambiguous, undefined);
+    assert.equal(result.type, 'opc-contentTypes:CT_Types');
+    assert.equal(graph.children('types').type, 'w:CT_DocPartTypes');
+    // With no exact match, case is still folded: a lowercased name is a typo,
+    // not a different question.
+    const folded = graph.element('TBLPR').symbols.map((s) => s.qname);
+    assert.ok(folded.includes('w:tblPr'));
+  });
+
   test('says so when a simple type has no content model at all', () => {
     // ST_OnOff lives in shared-commonSimpleTypes, prefix `s` — not wml. Asking
     // for `w:ST_OnOff` is a different (correct) answer: unknown_symbol.

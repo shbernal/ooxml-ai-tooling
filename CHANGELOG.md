@@ -30,6 +30,14 @@ runtime notices.
   namespace URI is unique per profile, no longer globally. A `sql` query that
   assumed one row per URI now sees two for the packaging namespaces.
 
+- Name lookups match the exact case first and fold case only when nothing
+  matches exactly. `Types` used to match `w:types` too; it now answers with
+  the content-types root alone. `tblpr` still finds `w:tblPr`.
+- An element name shared across vocabularies is reported as that kind of
+  ambiguity: `children p` now says `a:p, sml:p, w:p` are unrelated and to
+  qualify the name. It used to say `p` had three content models depending on
+  where it appears, which pointed the caller at the parent instead.
+
 - `explain` accepts a diagnostic pasted as text, for when there is no JSON
   report in hand. The id, xpath, part URI and quoted names are recovered where
   present; anything missing degrades the way a structured diagnostic missing
