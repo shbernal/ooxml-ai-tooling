@@ -17,9 +17,9 @@
  * upload — which is the check that would have caught 0.0.3 before anyone
  * installed it.
  *
- *   node build/skill-manifest.mjs                 # the local tree
- *   node build/skill-manifest.mjs --remote f.json # `clawhub inspect --files --json`
- *   node build/skill-manifest.mjs --verify f.json # every local file, present and identical
+ *   node scripts/skill-manifest.mjs                 # the local tree
+ *   node scripts/skill-manifest.mjs --remote f.json # `clawhub inspect --files --json`
+ *   node scripts/skill-manifest.mjs --verify f.json # every local file, present and identical
  *
  * `--verify` is containment, not equality, and that is deliberate: the registry
  * adds files of its own (`skill-card.md`, `_meta.json`) that were never in

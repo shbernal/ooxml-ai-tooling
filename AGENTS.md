@@ -12,7 +12,8 @@ attributes accept. See `README.md` for the full pitch and usage.
 ```
 core/     the implementation and its tests — the only real source
 schemas/  vendored ECMA-376 XSDs + PROVENANCE.md
-build/    XSD -> SQLite ingest (build-time only, never shipped)
+build/    XSD -> SQLite ingest, and the checks on the database (never shipped)
+scripts/  repo tooling that does not make or check the database
 skill/    SKILL.md, a CLI, and a vendored copy of the core
 mcp/      the mcp-server-ooxml npm package, a thin adapter over the core
 ```
@@ -190,7 +191,7 @@ copy, not independent code — the built database included.
 
 - **Never edit a vendored copy directly.** Edit the core, then `make sync-core`.
 - `make check-vendor` fails on drift and runs as a `pre-commit` hook.
-- Files not in `CORE_FILES` — the tests, everything in `build/` — are
+- Files not in `CORE_FILES` — the tests, everything in `build/` and `scripts/` — are
   development-only and must never reach a surface.
 - `make sync-core` is deliberately *not* automated: vendoring is a decision to
   record in the commit, not a side effect of it.

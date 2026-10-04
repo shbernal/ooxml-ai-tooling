@@ -9,6 +9,7 @@
     "includes": [
       "core/**/*.mjs",
       "build/**/*.mjs",
+      "scripts/**/*.mjs",
       "mcp/**/*.mjs",
       "skill/scripts/**/*.mjs",
       "*.json",
@@ -50,7 +51,7 @@
   },
   "overrides": [
     {
-      "includes": ["build/**/*.mjs", "core/*.test.mjs", "mcp/smoke.mjs"],
+      "includes": ["build/**/*.mjs", "scripts/**/*.mjs", "core/*.test.mjs", "mcp/smoke.mjs"],
       "linter": {
         "rules": {
           "suspicious": {

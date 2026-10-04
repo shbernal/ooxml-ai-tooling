@@ -168,12 +168,12 @@ jobs:
       # and every one of those becomes "the content differs, so publish".
       #
       # Containment, not equality: the registry adds a generated `skill-card.md`
-      # that was never in `skill/`. See build/skill-manifest.mjs.
+      # that was never in `skill/`. See scripts/skill-manifest.mjs.
       - name: Check whether the registry already has this skill
         id: state
         run: |
           clawhub inspect "$SKILL_REF" --tag latest --files --json > /tmp/latest.json 2>/dev/null || true
-          if node build/skill-manifest.mjs --verify /tmp/latest.json >/dev/null 2>&1; then
+          if node scripts/skill-manifest.mjs --verify /tmp/latest.json >/dev/null 2>&1; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "::notice::the published skill already matches skill/; skipping ClawHub"
           else
@@ -241,7 +241,7 @@ jobs:
           version="${RELEASE_TAG#v}"
           for attempt in $(seq 1 12); do
             if clawhub inspect "$SKILL_REF" --version "$version" --files --json > /tmp/published.json 2>/dev/null; then
-              node build/skill-manifest.mjs --verify /tmp/published.json
+              node scripts/skill-manifest.mjs --verify /tmp/published.json
               exit $?
             fi
             echo "attempt $attempt: $version is not fetchable yet; waiting for moderation"

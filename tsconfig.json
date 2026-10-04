@@ -46,6 +46,7 @@
   "include": [
     "core/**/*.mjs",
     "build/**/*.mjs",
+    "scripts/**/*.mjs",
     "mcp/*.mjs",
     "mcp/src/server.mjs",
     "skill/scripts/ooxml.mjs"
