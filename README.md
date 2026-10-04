@@ -12,18 +12,18 @@ Ask the ECMA-376 schema what is legal in a `.docx`, `.xlsx` or `.pptx`, offline.
 
 ---
 
-[Why this project?](#why-this-project) • [Install](#install) • [Quickstart](#quickstart) • [How it works](#how-it-works) • [Related projects](#related-projects)
+[Why this project?](#why-this-project) • [Install](#install) • [Usage](#usage) • [How it works](#how-it-works) • [Related projects](#related-projects)
 
 ---
 
 </div>
 
-<!--
-  Demo goes here. Record with VHS (https://github.com/charmbracelet/vhs):
-  an agent hits a validator error on w:ind, runs `ooxml explain` on it, then
-  `ooxml values s:ST_TwipsMeasure`, and writes w:firstLine="0.5in".
-  Export light and dark variants and switch them with <picture>.
--->
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.svg">
+  <img alt="An agent looks up which attributes w:ind takes and which values firstLine accepts, then writes w:firstLine=&quot;0.5in&quot;." src="assets/demo-light.svg" width="800">
+</picture>
+</p>
 
 ## Why this project?
 
@@ -93,42 +93,33 @@ npx skills add shbernal/ooxml-ai-tooling
 
 The two return identical answers. Both are thin adapters over one shared core.
 
-## Quickstart
+## Usage
 
-Say you are hand-writing a paragraph in a `.docx` and want to indent it.
+There is nothing to run yourself.
+Once installed, your agent looks things up when it is about to write Office XML.
+You can also point it there:
 
-1. Ask what attributes `w:ind` takes:
+> Add a first-line indent to the paragraphs in our `.docx` export. Check the schema before you write the XML.
 
-   ```console
-   $ ooxml attributes w:CT_Ind
-   {"type":"w:CT_Ind","count":12,"attributes":[
-     {"name":"firstLine","qualified":true,"use":"optional",
-      "type":{"qname":"s:ST_TwipsMeasure","kind":"simpleType"}}, …]}
-   ```
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/usage-skill-dark.svg">
+  <img alt="The agent loads ooxml-lookup, runs attributes w:CT_Ind and values s:ST_TwipsMeasure, and learns firstLine takes plain twips or a number with one of six units. It writes w:firstLine=&quot;0.5in&quot;." src="assets/usage-skill-light.svg" width="800">
+</picture>
+</p>
 
-2. Ask what values `firstLine` accepts:
+When Word or a validator rejects a file, paste the error and ask what would have been legal:
 
-   ```console
-   $ ooxml values s:ST_TwipsMeasure
-   {"type":"s:ST_TwipsMeasure","one_of":[
-     {"type":"s:ST_UnsignedDecimalNumber","base":"xsd:unsignedLong"},
-     {"type":"s:ST_PositiveUniversalMeasure",
-      "facets":{"pattern":"[0-9]+(\\.[0-9]+)?(mm|cm|in|pt|pc|pi)"}}]}
-   ```
+> Word won't open this. The validator says `The 'bogus' attribute is not declared` at `/w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]`.
 
-   So `w:firstLine="720"` and `w:firstLine="0.5in"` are both legal, and the units are a closed set of six.
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/usage-mcp-dark.svg">
+  <img alt="The agent calls the ooxml_explain MCP tool with the diagnostic. It answers that bogus is not an attribute of w:ind and lists the 12 that are, so the agent removes it." src="assets/usage-mcp-light.svg" width="800">
+</picture>
+</p>
 
-3. Got a validation error instead? Hand it over as-is:
-
-   ```console
-   $ ooxml explain "Sch_UndeclaredAttribute: The 'bogus' attribute is not declared. at /w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]"
-   {"resolved":true,"finding":{"kind":"undeclared_attribute","name":"bogus"},
-    "message":"The 'bogus' attribute is not allowed on w:ind. Its legal attributes are listed below.", …}
-   ```
-
-The skill runs these as `node scripts/ooxml.mjs <command>`.
-The MCP server exposes the same questions as `ooxml_attributes`, `ooxml_values`, `ooxml_explain` and seven more.
-See [`skill/SKILL.md`](skill/SKILL.md) for the CLI and [`mcp/README.md`](mcp/README.md) for the tool list.
+[`skill/SKILL.md`](skill/SKILL.md) covers the CLI and [`mcp/README.md`](mcp/README.md) lists the MCP tools.
 
 ## How it works
 
