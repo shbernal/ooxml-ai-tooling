@@ -120,10 +120,6 @@ art and its data model informed the shape of this one. No code is shared; this
 is not a fork or a drop-in replacement. Its MCP server is a client of a hosted
 service, which is the gap this fills.
 
-The vendored ECMA-376 schemas are redistributed unmodified under Ecma
-International's free-availability terms and Microsoft's Open Specification
-Promise. This does not affect the MIT license on this package's own code.
-
 ## License
 
 MIT © shbernal
