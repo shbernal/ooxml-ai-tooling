@@ -348,8 +348,20 @@ export const ATTRIBUTES = oneOf(
   [ATTRIBUTES_FOUND, ATTRIBUTES_AMBIGUOUS, NO_CONTENT_MODEL],
 );
 
+const SIMPLE_CONTENT_OF = z
+  .string()
+  .optional()
+  .describe(
+    'Set when the name is typed by a complex type with simple content: that type. The value ' +
+      'space answered is its base simple type.',
+  );
+
+/** On a variant of a name whose declarations differ by site: the sites. */
+const VALUE_SITES = {applies_when_declared_in: STRINGS.optional()};
+
 const ENUMERATION = {
   type: NULLABLE_STRING,
+  simple_content_of: SIMPLE_CONTENT_OF,
   enumerated: z.boolean(),
   reason: z.literal('not_a_simple_type').optional(),
   message: MESSAGE.optional(),
@@ -359,20 +371,22 @@ const ENUMERATION = {
 
 export const ENUM = oneOf('ooxml_enum: the enumerated values, in schema order.', [
   z.strictObject({query: QUERY, profile: PROFILE, found: TRUE, ...ENUMERATION}),
-  ambiguous(z.strictObject(ENUMERATION)),
+  ambiguous(z.strictObject({...ENUMERATION, ...VALUE_SITES})),
   KIND_MISS,
 ]);
 
 const VALUE_ANSWER = {
   type: NULLABLE_STRING,
+  simple_content_of: SIMPLE_CONTENT_OF,
   builtin: TRUE.optional(),
+  reason: z.literal('not_a_simple_type').optional(),
   message: MESSAGE.optional(),
   external_source: EXTERNAL_SOURCE,
   ...VALUE_SPACE,
 };
 
 const VALUES_FOUND = z.strictObject({query: QUERY, profile: PROFILE, found: TRUE, ...VALUE_ANSWER});
-const VALUES_AMBIGUOUS = ambiguous(z.strictObject(VALUE_ANSWER));
+const VALUES_AMBIGUOUS = ambiguous(z.strictObject({...VALUE_ANSWER, ...VALUE_SITES}));
 
 export const VALUES = oneOf('ooxml_values: the legal value space of a simple type.', [
   VALUES_FOUND,
@@ -451,8 +465,10 @@ export const DIFF_PROFILES = oneOf('ooxml_diff_profiles: what Transitional adds 
           PROFILE,
           z.strictObject({
             namespace: NULLABLE_STRING,
-            children: COUNT,
-            attributes: COUNT,
+            children: STRINGS.describe(
+              'Every child the content model permits, inheritance and groups resolved.',
+            ),
+            attributes: STRINGS.describe('Every attribute accepted, as qname or bare name.'),
             enumeration: STRINGS,
             union_members: z.array(NULLABLE_STRING),
           }),

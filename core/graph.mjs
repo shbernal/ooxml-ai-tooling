@@ -124,13 +124,6 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       pid,
     ).n;
 
-  const attributeCount = (symbolId, pid) =>
-    handle.get(
-      'SELECT COUNT(*) AS n FROM attr_edges WHERE symbol_id = ? AND profile_id = ?',
-      symbolId,
-      pid,
-    ).n;
-
   /** The type or group a local declaration sits in, or null for a global one. */
   const declaredInName = (row) =>
     row.parent_symbol_id === 0 ? null : display(symbolById(row.parent_symbol_id));
@@ -293,6 +286,8 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
         calls.add(`children('${qname}')`);
       } else if (k === 'attribute' || k === 'simpleType') {
         calls.add(`values('${qname}')`);
+      } else if (k === 'attributeGroup') {
+        calls.add(`attributes('${qname}')`);
       } else {
         calls.add(`element('${qname}')`);
       }
@@ -418,7 +413,9 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
             ? {value_space: describeValueSpace(row.id, pid, 0)}
             : {
                 content: contentSummary(row.id, pid),
-                attribute_count: attributeCount(row.id, pid),
+                // The whole legal set, inherited and grouped attributes
+                // included, not the ones this type happens to declare itself.
+                attribute_count: attributeSet(row.id, pid).list.length,
               };
         return {
           ...describeSymbol(row, profile),
@@ -509,7 +506,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
    * useless; picking one silently would be wrong. So each variant is resolved
    * and labelled with where it applies, and the caller decides.
    */
-  function resolveToType(qname, profile) {
+  function resolveToType(qname, profile, {attributeGroups = false} = {}) {
     const found = lookup(qname);
     const matches = inProfile(found.rows, profile);
     if (matches.length === 0) return notFound(qname, found, profile);
@@ -518,7 +515,8 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     // `CT_Shape` is declared in six, and they are unrelated types that happen
     // to share a name. Returning the first is the silent pick rule 3 forbids,
     // and it is the wrong one five times out of six.
-    const asType = matches.filter((r) => r.kind === 'complexType' || r.kind === 'group');
+    const typeKinds = ['complexType', 'group', ...(attributeGroups ? ['attributeGroup'] : [])];
+    const asType = matches.filter((r) => typeKinds.includes(r.kind));
     if (asType.length > 0) {
       return {
         found: true,
@@ -528,19 +526,30 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       };
     }
 
-    const declarations = matches.filter((r) => r.type_symbol_id !== null);
+    // Only a complex type has content or attributes. A declaration typed by a
+    // simple type resolved to that type answers an empty tree with
+    // `found: true`, which reads as "nothing is allowed here", not "this holds
+    // a value".
+    const declarations = matches.filter(
+      (r) => r.type_symbol_id !== null && symbolById(r.type_symbol_id).kind === 'complexType',
+    );
     if (declarations.length === 0) {
-      const builtin = matches.find((r) => r.type_ref !== null);
+      const group = matches.find((r) => r.kind === 'attributeGroup');
+      const simple = matches.find((r) => r.kind === 'simpleType' || r.type_ref !== null);
       const external = matches.find((r) => externalSource(r.vocabulary) !== null);
       return {
         found: false,
         reason: 'no_content_model',
-        message: builtin
-          ? `${qname} has type ${displayRef(builtin.type_ref)}, a built-in with no element content.`
-          : external
-            ? `${display(external)} is defined outside ECMA-376, and its type is not recorded here. ` +
-              `Defined in: ${externalSource(external.vocabulary)}`
-            : `${qname} declares no type, so it has no children in the schema.`,
+        message: group
+          ? `${qname} is an attribute group: it has attributes but no element content. ` +
+            `Use attributes('${qname}').`
+          : simple
+            ? `${qname} ${simple.kind === 'simpleType' ? 'is' : `has type ${displayRef(simple.type_ref)},`} ` +
+              `a simple type with no element content or attributes. Use values('${qname}').`
+            : external
+              ? `${display(external)} is defined outside ECMA-376, and its type is not recorded here. ` +
+                `Defined in: ${externalSource(external.vocabulary)}`
+              : `${qname} declares no type, so it has no children in the schema.`,
       };
     }
 
@@ -774,101 +783,14 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
    */
   function attributes(qname, {profile = DEFAULT_PROFILE} = {}) {
     const pid = profileId(profile);
-    const resolved = resolveToType(qname, profile);
+    // An attributeGroup has no content model, but it does have attributes:
+    // `w:AG_Password` is the whole answer to "what does document protection
+    // take".
+    const resolved = resolveToType(qname, profile, {attributeGroups: true});
     if (resolved.found === false) return {query: qname, profile, ...resolved};
 
-    const collectFor = (rootSymbolId) => {
-      const collected = [];
-      // Shared across the base-type recursion too, so a group referenced by
-      // both a base and a derived type is expanded once, at the base. That is
-      // safe because an attributeGroup carries no per-site variation in
-      // ECMA-376; it would stop being safe if one ever did.
-      const seenGroups = new Set();
-      const state = {truncated: false};
-
-      const collect = (symbolId, from, depth) => {
-        // Recorded, never silent: a short list with no flag reads as the whole
-        // legal set, and the caller would never add the missing attribute.
-        if (depth > MAX_DEPTH) {
-          state.truncated = true;
-          return;
-        }
-
-        const base = baseOf(symbolId, pid);
-        // Both extension and restriction inherit attributes — unlike particles,
-        // where restriction replaces. A restriction may narrow an attribute's
-        // use, and the derived declaration wins, which is why the base is
-        // collected first and later duplicates override.
-        if (base !== undefined && base.base_symbol_id !== null) {
-          collect(base.base_symbol_id, display(symbolById(base.base_symbol_id)), depth + 1);
-        }
-
-        // A `ref` attribute declares nothing itself: its type is on the global
-        // attribute it names, and so is its namespace. Read both through the
-        // ref, or `r:id` comes back untyped and indistinguishable from `id`.
-        const owner = symbolById(symbolId).vocabulary;
-        for (const row of handle.all(
-          `SELECT e.local_name, e.attr_use, e.is_qualified, e.default_value, e.fixed_value,
-                  COALESCE(e.type_ref, a.type_ref) AS type_ref,
-                  COALESCE(e.type_symbol_id, a.type_symbol_id) AS type_symbol_id,
-                  v.key AS ref_vocabulary
-             FROM attr_edges e
-             LEFT JOIN symbols a ON a.id = e.attr_symbol_id
-             LEFT JOIN vocabularies v ON v.id = a.vocabulary_id
-            WHERE e.symbol_id = ? AND e.profile_id = ? ORDER BY e.order_index`,
-          symbolId,
-          pid,
-        )) {
-          const qualified = row.is_qualified === 1;
-          const vocabulary = row.ref_vocabulary ?? (qualified ? owner : null);
-          collected.push({
-            name: row.local_name,
-            // The spelling a document uses. Absent on an unqualified attribute,
-            // which is in no namespace and is written bare.
-            ...(vocabulary === null ? {} : {qname: formatQName(vocabulary, row.local_name, index)}),
-            qualified,
-            use: row.attr_use,
-            type: describeType(row.type_ref, row.type_symbol_id),
-            ...(row.default_value === null ? {} : {default: row.default_value}),
-            ...(row.fixed_value === null ? {} : {fixed: row.fixed_value}),
-            ...(from === null ? {} : {from}),
-          });
-        }
-
-        for (const row of handle.all(
-          `SELECT group_symbol_id FROM group_edges
-          WHERE parent_symbol_id = ? AND profile_id = ? AND ref_kind = 'attributeGroup'
-          ORDER BY order_index`,
-          symbolId,
-          pid,
-        )) {
-          if (seenGroups.has(row.group_symbol_id)) continue;
-          seenGroups.add(row.group_symbol_id);
-          collect(row.group_symbol_id, display(symbolById(row.group_symbol_id)), depth + 1);
-        }
-      };
-
-      collect(rootSymbolId, null, 0);
-
-      // A derived type redeclaring an inherited attribute wins; it was
-      // collected later, so the last write is the right one. Keyed on the
-      // namespace too: `id` and `r:id` on a slide list entry are two
-      // attributes, not one declared twice.
-      const byIdentity = new Map();
-      for (const attribute of collected)
-        byIdentity.set(attribute.qname ?? attribute.name, attribute);
-      return {
-        list: [...byIdentity.values()].sort(
-          (a, b) =>
-            a.name.localeCompare(b.name, 'en') ||
-            (a.qname ?? '').localeCompare(b.qname ?? '', 'en'),
-        ),
-        truncated: state.truncated,
-      };
-    };
-
     const describe = (variant) => {
-      const {list, truncated} = collectFor(variant.symbol.id);
+      const {list, truncated} = attributeSet(variant.symbol.id, pid);
       return {...placement(variant, truncated), count: list.length, attributes: list};
     };
 
@@ -879,6 +801,95 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       describe,
       ambiguityMessage(qname, resolved, 'types'),
     );
+  }
+
+  /** Every attribute one type or attributeGroup accepts, resolved and sorted by name. */
+  function attributeSet(rootSymbolId, pid) {
+    const collected = [];
+    // Shared across the base-type recursion too, so a group referenced by
+    // both a base and a derived type is expanded once, at the base. That is
+    // safe because an attributeGroup carries no per-site variation in
+    // ECMA-376; it would stop being safe if one ever did.
+    const seenGroups = new Set();
+    const state = {truncated: false};
+
+    const collect = (symbolId, from, depth) => {
+      // Recorded, never silent: a short list with no flag reads as the whole
+      // legal set, and the caller would never add the missing attribute.
+      if (depth > MAX_DEPTH) {
+        state.truncated = true;
+        return;
+      }
+
+      const base = baseOf(symbolId, pid);
+      // Both extension and restriction inherit attributes — unlike particles,
+      // where restriction replaces. A restriction may narrow an attribute's
+      // use, and the derived declaration wins, which is why the base is
+      // collected first and later duplicates override.
+      if (base !== undefined && base.base_symbol_id !== null) {
+        collect(base.base_symbol_id, display(symbolById(base.base_symbol_id)), depth + 1);
+      }
+
+      // A `ref` attribute declares nothing itself: its type is on the global
+      // attribute it names, and so is its namespace. Read both through the
+      // ref, or `r:id` comes back untyped and indistinguishable from `id`.
+      const owner = symbolById(symbolId).vocabulary;
+      for (const row of handle.all(
+        `SELECT e.local_name, e.attr_use, e.is_qualified, e.default_value, e.fixed_value,
+                COALESCE(e.type_ref, a.type_ref) AS type_ref,
+                COALESCE(e.type_symbol_id, a.type_symbol_id) AS type_symbol_id,
+                v.key AS ref_vocabulary
+           FROM attr_edges e
+           LEFT JOIN symbols a ON a.id = e.attr_symbol_id
+           LEFT JOIN vocabularies v ON v.id = a.vocabulary_id
+          WHERE e.symbol_id = ? AND e.profile_id = ? ORDER BY e.order_index`,
+        symbolId,
+        pid,
+      )) {
+        const qualified = row.is_qualified === 1;
+        const vocabulary = row.ref_vocabulary ?? (qualified ? owner : null);
+        collected.push({
+          name: row.local_name,
+          // The spelling a document uses. Absent on an unqualified attribute,
+          // which is in no namespace and is written bare.
+          ...(vocabulary === null ? {} : {qname: formatQName(vocabulary, row.local_name, index)}),
+          qualified,
+          use: row.attr_use,
+          type: describeType(row.type_ref, row.type_symbol_id),
+          ...(row.default_value === null ? {} : {default: row.default_value}),
+          ...(row.fixed_value === null ? {} : {fixed: row.fixed_value}),
+          ...(from === null ? {} : {from}),
+        });
+      }
+
+      for (const row of handle.all(
+        `SELECT group_symbol_id FROM group_edges
+        WHERE parent_symbol_id = ? AND profile_id = ? AND ref_kind = 'attributeGroup'
+        ORDER BY order_index`,
+        symbolId,
+        pid,
+      )) {
+        if (seenGroups.has(row.group_symbol_id)) continue;
+        seenGroups.add(row.group_symbol_id);
+        collect(row.group_symbol_id, display(symbolById(row.group_symbol_id)), depth + 1);
+      }
+    };
+
+    collect(rootSymbolId, null, 0);
+
+    // A derived type redeclaring an inherited attribute wins; it was
+    // collected later, so the last write is the right one. Keyed on the
+    // namespace too: `id` and `r:id` on a slide list entry are two
+    // attributes, not one declared twice.
+    const byIdentity = new Map();
+    for (const attribute of collected) byIdentity.set(attribute.qname ?? attribute.name, attribute);
+    return {
+      list: [...byIdentity.values()].sort(
+        (a, b) =>
+          a.name.localeCompare(b.name, 'en') || (a.qname ?? '').localeCompare(b.qname ?? '', 'en'),
+      ),
+      truncated: state.truncated,
+    };
   }
 
   // --------------------------------------------------------------- values ---
@@ -905,24 +916,95 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       });
     }
 
-    const targets = [];
-    const seen = new Set();
+    const pid = profileId(profile);
+    const byKey = new Map();
     for (const row of matches) {
-      const symbolId = row.kind === 'simpleType' ? row.id : row.type_symbol_id;
-      const key = symbolId === null ? `ref:${row.type_ref}` : `id:${symbolId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      targets.push({row, symbolId});
+      const target = valueTarget(row, pid);
+      const key = target.symbolId === null ? `ref:${target.typeRef}` : `id:${target.symbolId}`;
+      if (!byKey.has(key)) byKey.set(key, {...target, sites: []});
+      byKey.get(key).sites.push(declaredInName(row) ?? 'global');
     }
-    return {found: true, targets};
+    const targets = [...byKey.values()];
+
+    // `w:p` is an element, so it gets this far, but its type is element
+    // content. Answering `unconstrained` would read as "any string is legal".
+    if (targets.every((t) => t.complex)) {
+      return wrongKind(qname, matches, matches, 'one with a simple value space');
+    }
+    // As in `resolveToType`: qualifying fixes a name shared across
+    // vocabularies, but not one whose declarations differ by site, like sml
+    // `t`, which is text in rich text and a tuple inside an MDX entry.
+    const ambiguity =
+      new Set(matches.map((r) => r.vocabulary)).size > 1 ? 'vocabulary' : 'declaration_site';
+    return {found: true, ambiguity, targets};
   }
 
-  const targetName = ({row, symbolId}) =>
-    symbolId === null ? displayRef(row.type_ref) : display(symbolById(symbolId));
+  /**
+   * The simple type that bounds a declaration's text, or the complex type
+   * that stands in its way.
+   *
+   * A complex type with simple content carries a value as well as
+   * attributes: `x:f` is `CT_CellFormula`, which extends `ST_Formula`. Its
+   * value space is the base's, so the chain is followed to it.
+   *
+   * @returns {{row: any, symbolId: number | null, typeRef: string | null, complex?: true, simpleContentOf?: string}}
+   */
+  function valueTarget(row, pid) {
+    if (row.kind === 'simpleType') return {row, symbolId: row.id, typeRef: null};
+    let symbolId = row.type_symbol_id;
+    let typeRef = row.type_ref;
+    let simpleContentOf;
+    for (let depth = 0; symbolId !== null; depth++) {
+      const symbol = symbolById(symbolId);
+      if (symbol.kind === 'simpleType') break;
+      const base = baseOf(symbolId, pid);
+      if (base?.content_model !== 'simpleContent' || depth > MAX_DEPTH) {
+        return {row, symbolId, typeRef, complex: true};
+      }
+      simpleContentOf ??= display(symbol);
+      symbolId = base.base_symbol_id;
+      typeRef = base.base_type_ref;
+    }
+    return {row, symbolId, typeRef, ...(simpleContentOf === undefined ? {} : {simpleContentOf})};
+  }
 
-  const simpleTypeAmbiguityMessage = (qname, targets) =>
-    `"${qname}" resolves to ${targets.length} unrelated types that share a local name: ` +
-    `${targets.map(targetName).join(', ')}. Qualify the name to pick one.`;
+  const targetName = ({symbolId, typeRef}) =>
+    symbolId === null ? displayRef(typeRef) : display(symbolById(symbolId));
+
+  /** Where a target's value space came from, when it was not the declared type. */
+  const viaField = (target) =>
+    target.simpleContentOf === undefined ? {} : {simple_content_of: target.simpleContentOf};
+
+  /** A variant of an ambiguous name whose type is element content. */
+  const complexVariant = (target, extra) => ({
+    type: targetName(target),
+    reason: 'not_a_simple_type',
+    message:
+      `${targetName(target)} has element content, so it has no simple value space. ` +
+      `Use children('${targetName(target)}').`,
+    ...extra,
+  });
+
+  /**
+   * Every variant of a value-space answer, labelled with where it applies
+   * when that is what tells the variants apart. Mirrors `variantAnswer`.
+   */
+  const valueAnswer = (qname, profile, resolved, describe) =>
+    variantAnswer(
+      qname,
+      profile,
+      resolved.targets,
+      (target) => ({
+        ...describe(target),
+        ...(resolved.ambiguity === 'declaration_site' && resolved.targets.length > 1
+          ? {applies_when_declared_in: target.sites}
+          : {}),
+      }),
+      resolved.ambiguity === 'vocabulary'
+        ? `"${qname}" resolves to ${resolved.targets.length} unrelated types that share a local ` +
+            `name: ${resolved.targets.map(targetName).join(', ')}. Qualify the name to pick one.`
+        : `${qname} has ${resolved.targets.length} different value spaces depending on where it appears.`,
+    );
 
   /** Enumeration values only. Says so usefully when the type is not enumerated. */
   function enumValues(qname, {profile = DEFAULT_PROFILE} = {}) {
@@ -931,9 +1013,11 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     if (resolved.found === false) return {query: qname, profile, ...resolved};
 
     const describe = (target) => {
+      if (target.complex) return complexVariant(target, {enumerated: false, values: []});
       if (target.symbolId === null) {
         return {
           type: targetName(target),
+          ...viaField(target),
           enumerated: false,
           reason: 'not_a_simple_type',
           message: `${display(target.row)} has no simple type to enumerate.`,
@@ -947,6 +1031,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       if (values.length === 0) {
         return {
           type: name,
+          ...viaField(target),
           enumerated: false,
           message: `${name} is not an enumerated type; use values() for its facets and union members.`,
           values: [],
@@ -954,19 +1039,14 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       }
       return {
         type: name,
+        ...viaField(target),
         enumerated: true,
         count: values.length,
         values,
       };
     };
 
-    return variantAnswer(
-      qname,
-      profile,
-      resolved.targets,
-      describe,
-      simpleTypeAmbiguityMessage(qname, resolved.targets),
-    );
+    return valueAnswer(qname, profile, resolved, describe);
   }
 
   /**
@@ -984,8 +1064,9 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     if (resolved.found === false) return {query: qname, profile, ...resolved};
 
     const describe = (target) => {
+      if (target.complex) return complexVariant(target, {});
       if (target.symbolId === null) {
-        if (target.row.type_ref === null) {
+        if (target.typeRef === null) {
           const source = externalSource(target.row.vocabulary);
           return {
             type: null,
@@ -1000,20 +1081,23 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
         const name = targetName(target);
         return {
           type: name,
+          ...viaField(target),
           builtin: true,
-          message: `${display(target.row)} is typed ${name}, an XSD built-in; its value space is the XSD one.`,
+          message:
+            target.simpleContentOf === undefined
+              ? `${display(target.row)} is typed ${name}, an XSD built-in; its value space is the XSD one.`
+              : `${display(target.row)} holds ${name} text through ${target.simpleContentOf}, an XSD ` +
+                'built-in; its value space is the XSD one.',
         };
       }
-      return {type: targetName(target), ...describeValueSpace(target.symbolId, pid, 0)};
+      return {
+        type: targetName(target),
+        ...viaField(target),
+        ...describeValueSpace(target.symbolId, pid, 0),
+      };
     };
 
-    return variantAnswer(
-      qname,
-      profile,
-      resolved.targets,
-      describe,
-      simpleTypeAmbiguityMessage(qname, resolved.targets),
-    );
+    return valueAnswer(qname, profile, resolved, describe);
   }
 
   function describeValueSpace(symbolId, pid, depth) {
@@ -1197,13 +1281,15 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       count: rows.length,
       symbols: rows.map((row) => {
         const present = symbolProfiles(row.id);
+        const shaped = shapeSymbolOf(row);
         const perProfile = {};
         for (const key of present) {
           const pid = profileId(key);
           perProfile[key] = {
             namespace: namespaceOf(row.vocabulary, key)?.uri ?? null,
-            children: childEdgeCount(row.id, pid),
-            attributes: attributeCount(row.id, pid),
+            children: shaped === null ? [] : childNames(shaped, pid),
+            attributes:
+              shaped === null ? [] : attributeSet(shaped, pid).list.map((a) => a.qname ?? a.name),
             enumeration: enumValuesOf(row.id, pid),
             union_members: handle
               .all(
@@ -1229,16 +1315,34 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     };
   }
 
+  /**
+   * The symbol whose content and attributes describe `row`: a type, group or
+   * attributeGroup itself, an element's or attribute's type, or null for a
+   * name with no such shape.
+   */
+  const shapeSymbolOf = (row) => {
+    if (['complexType', 'group', 'attributeGroup'].includes(row.kind)) return row.id;
+    if (row.type_symbol_id === null) return null;
+    return symbolById(row.type_symbol_id).kind === 'complexType' ? row.type_symbol_id : null;
+  };
+
+  /**
+   * Every child a symbol permits, as a set of names, inheritance and groups
+   * resolved. A raw edge count misses both: a DrawingML type whose content is
+   * one group ref has no edges of its own, so a profile difference inside the
+   * group never showed.
+   */
+  const childNames = (symbolId, pid) => {
+    const state = {seenGroups: new Set(), truncated: false};
+    const order = flatten(particlesOf(symbolId, pid, state, 0, true));
+    return [...new Set(order.map((entry) => entry.qname ?? `any(${entry.wildcard})`))];
+  };
+
   function describeDifferences(perProfile, present) {
     if (present.length < 2) return [`present only in ${present.join(', ')}`];
     const [a, b] = present;
     const notes = [];
-    for (const field of ['children', 'attributes']) {
-      if (perProfile[a][field] !== perProfile[b][field]) {
-        notes.push(`${field}: ${a}=${perProfile[a][field]}, ${b}=${perProfile[b][field]}`);
-      }
-    }
-    for (const field of ['enumeration', 'union_members']) {
+    for (const field of ['children', 'attributes', 'enumeration', 'union_members']) {
       const onlyA = perProfile[a][field].filter((v) => !perProfile[b][field].includes(v));
       const onlyB = perProfile[b][field].filter((v) => !perProfile[a][field].includes(v));
       if (onlyA.length > 0) notes.push(`${field} only in ${a}: ${onlyA.join(', ')}`);

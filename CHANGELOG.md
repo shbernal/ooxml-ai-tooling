@@ -30,6 +30,33 @@ runtime notices.
   so `'r:id'` resolves to the relationship id's value space.
 - `type`'s `derivation.base` reads like every other type reference: a base
   that is not built in now carries its `kind` and `id`.
+- **`diff_profiles` compares what is allowed, not edge counts.** Each
+  profile's `detail.children` and `detail.attributes` are now name lists, with
+  inheritance, group refs and attributeGroups resolved, and `differences`
+  names what only one profile allows (`children only in transitional:
+  p:htmlPubPr, p:webPr`). An element is compared through its type. The counts
+  were raw edges on the symbol itself, so a type whose content is one group ref
+  reported 0 children, and an element always reported 0. For the old numbers,
+  take the length of each list.
+- `type`'s `attribute_count` counts inherited and grouped attributes too, the
+  same set `attributes` returns.
+- **`values` and `enum` no longer call element content `unconstrained`.**
+  `values('w:p')` answered `unconstrained: true`, which reads as "any string
+  is legal". A name whose type is element content is now a `wrong_kind` miss.
+  When only some of a name's declarations are, those variants carry
+  `reason: 'not_a_simple_type'`.
+- When a name's value spaces differ by declaration site within one vocabulary,
+  as sml `t` does, `values` and `enum` say so instead of advising to qualify
+  the name, and each variant carries `applies_when_declared_in`.
+- `values` and `enum` follow a complex type with simple content to its base.
+  `values('x:f')` answers `sml:ST_Formula`, with
+  `simple_content_of: 'sml:CT_CellFormula'`, instead of `unconstrained`.
+- **`attributes` takes an attributeGroup.** `attributes('w:AG_Password')`
+  returns the group's attributes instead of `no_content_model`, and a
+  `wrong_kind` miss on an attributeGroup points at `attributes()`.
+- `children` and `attributes` on a name typed by a simple type, `r:id` for
+  one, answer `no_content_model` and point at `values()`. They used to answer
+  `found: true` with an empty list.
 
 ### npm only
 

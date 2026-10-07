@@ -331,6 +331,26 @@ describe('attributes', () => {
     const result = graph.attributes('a:CT_Blip');
     assert.ok(result.attributes.some((a) => a.from !== undefined));
   });
+
+  test('answers an attributeGroup with the attributes it carries', () => {
+    const result = graph.attributes('w:AG_Password');
+    assert.equal(result.found, true);
+    assert.ok(result.attributes.some((a) => a.qname === 'w:hashValue'));
+    // It has no content model, and the miss says where the answer is.
+    const children = graph.children('w:AG_Password');
+    assert.equal(children.reason, 'no_content_model');
+    assert.match(children.message, /attributes\('w:AG_Password'\)/);
+    assert.match(graph.type('w:AG_Password').message, /attributes\('w:AG_Password'\)/);
+  });
+
+  test('a simple-typed name has no content model rather than an empty one', () => {
+    // `found: true` with an empty tree reads as "nothing may go here".
+    for (const tool of ['children', 'attributes']) {
+      const result = graph[tool]('r:id');
+      assert.equal(result.reason, 'no_content_model', tool);
+      assert.match(result.message, /values\('r:id'\)/, tool);
+    }
+  });
 });
 
 describe('values and enum', () => {
@@ -352,6 +372,33 @@ describe('values and enum', () => {
     assert.equal(result.found, true);
     assert.equal(result.one_of.length, 2);
     assert.ok(result.one_of.some((m) => m.facets?.pattern !== undefined));
+  });
+
+  test('values on an element of element content is a kind miss, not unconstrained', () => {
+    const result = graph.values('w:p');
+    assert.equal(result.reason, 'wrong_kind');
+    assert.match(result.message, /children\('w:p'\)/);
+  });
+
+  test('values follows simple content to the base type', () => {
+    // CT_CellFormula carries attributes, but its text is an ST_Formula.
+    const result = graph.values('x:f');
+    assert.equal(result.type, 'sml:ST_Formula');
+    assert.equal(result.simple_content_of, 'sml:CT_CellFormula');
+    assert.equal(result.unconstrained, undefined);
+  });
+
+  test('values keeps an element-content declaration as a variant that says so', () => {
+    // sml `t` is ST_Xstring text in rich text, and a CT_MdxTuple inside CT_Mdx.
+    const result = graph.values('x:t');
+    assert.equal(result.ambiguous, true);
+    // One vocabulary, so the advice is where each applies, not to qualify.
+    assert.doesNotMatch(result.message, /Qualify/);
+    const complex = result.variants.find((v) => v.type === 'sml:CT_MdxTuple');
+    assert.equal(complex.reason, 'not_a_simple_type');
+    assert.deepEqual(complex.applies_when_declared_in, ['sml:CT_Mdx']);
+    assert.equal(complex.unconstrained, undefined);
+    assert.ok(result.variants.some((v) => v.type === 's:ST_Xstring'));
   });
 
   test('values reports facets, which is the whole point of having them', () => {
@@ -533,6 +580,17 @@ describe('diff_profiles', () => {
     assert.deepEqual(symbol.detail.transitional.union_members, ['xsd:boolean', 's:ST_OnOff1']);
     assert.deepEqual(symbol.detail.strict.union_members, ['xsd:boolean']);
     assert.ok(symbol.differences.some((d) => d.includes('ST_OnOff1')));
+  });
+
+  test('compares resolved child and attribute sets, groups and inheritance included', () => {
+    // The whole content model is one group ref, so a raw edge count is 0.
+    const fill = graph.diff_profiles('a:CT_SolidColorFillProperties').symbols[0];
+    assert.ok(fill.detail.strict.children.includes('a:srgbClr'));
+    // A difference reached through inheritance or a group now shows, by name.
+    const pr = graph.diff_profiles('p:CT_PresentationProperties').symbols[0];
+    assert.ok(pr.differences.includes('children only in transitional: p:htmlPubPr, p:webPr'));
+    const ole = graph.diff_profiles('p:CT_OleObject').symbols[0];
+    assert.ok(ole.differences.includes('attributes only in transitional: spid'));
   });
 
   test('reports a symbol that exists in only one profile', () => {

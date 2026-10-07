@@ -199,8 +199,8 @@ server.registerTool(
   {
     title: 'Transitional vs Strict for one symbol',
     description:
-      'What differs between the two profiles for a given name: namespace URI, child and ' +
-      'attribute counts, enumeration values and union members. Strict is a subset — every ' +
+      'What differs between the two profiles for a given name: namespace URI, the ' +
+      'children and attributes allowed, enumeration values and union members. Strict is a subset — every ' +
       'difference is something Transitional adds back for legacy compatibility — so this ' +
       'answers "will this still be valid in Strict".',
     inputSchema: z.object({qname: NAME}),
