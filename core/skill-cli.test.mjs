@@ -199,6 +199,24 @@ describe('the CLI contract', () => {
     });
   }
 
+  for (const [args, expected] of [
+    [['element', 'w:p', '--profile'], /--profile needs a value/],
+    [['element', 'w:p', '--profile', '--compact'], /--profile needs a value/],
+    [['element', 'w:p', '--profile', 'bogus'], /--profile must be one of transitional, strict/],
+  ]) {
+    test(`${args.slice(2).join(' ')} exits 2 with usage instead of answering`, () => {
+      try {
+        run(args);
+        assert.fail('expected a non-zero exit');
+      } catch (error) {
+        assert.equal(error.status, 2);
+        assert.equal(error.stdout, '');
+        assert.match(error.stderr, expected);
+        assert.match(error.stderr, /ooxml element/);
+      }
+    });
+  }
+
   test('an unknown command exits 2 with usage, not a stack trace', () => {
     try {
       run(['nonsense']);

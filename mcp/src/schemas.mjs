@@ -25,6 +25,7 @@
  * the whole corpus through these to catch exactly that.
  */
 import {z} from 'zod';
+import {PROFILE_KEYS} from './graph.mjs';
 
 /**
  * One tool's schema: the union of its response shapes.
@@ -49,7 +50,7 @@ const oneOf = (description, shapes) => z.union(shapes).describe(description);
  */
 const shared = (id, schema) => schema.meta({id});
 
-const PROFILE = z.enum(['transitional', 'strict']);
+const PROFILE = z.enum(PROFILE_KEYS);
 const QUERY = z.string();
 const MESSAGE = z.string();
 const COUNT = z.number().int().nonnegative();

@@ -14,7 +14,7 @@
  * the first call, and an agent piping this into a parser sees noise.
  */
 import {explainDiagnostic, parseDiagnosticText} from './explain.mjs';
-import {createGraph} from './graph.mjs';
+import {createGraph, PROFILE_KEYS} from './graph.mjs';
 
 const USAGE = `ooxml — query the ECMA-376 schema graph, offline.
 
@@ -38,7 +38,14 @@ Options:
 Names may be written w:tblPr, wml:tblPr, {namespace-uri}tblPr, or bare.
 A bare name that means several things returns all of them.`;
 
-/** `--flag value` and `--flag=value`, with everything else positional. */
+/** Flags that stand alone. Every other flag takes a value. */
+const SWITCHES = new Set(['compact', 'help']);
+
+/**
+ * `--flag value` and `--flag=value`, with everything else positional. A flag
+ * that takes a value and has none is a usage error: read as undefined,
+ * `ooxml element w:p --profile` answered for Transitional without a word.
+ */
 function parseArgv(argv) {
   const positional = [];
   const options = {};
@@ -51,10 +58,15 @@ function parseArgv(argv) {
     const eq = arg.indexOf('=');
     if (eq !== -1) {
       options[arg.slice(2, eq)] = arg.slice(eq + 1);
-    } else if (arg === '--compact' || arg === '--help') {
+    } else if (SWITCHES.has(arg.slice(2))) {
       options[arg.slice(2)] = true;
     } else {
-      options[arg.slice(2)] = argv[++i];
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith('--')) {
+        throw new UsageError(`${arg} needs a value`);
+      }
+      options[arg.slice(2)] = value;
+      i += 1;
     }
   }
   return {positional, options};
@@ -66,7 +78,11 @@ const MAX_LIMIT = 200;
 /**
  * `--limit`, validated. Unchecked, `Number('abc')` made `sql` report rows it
  * then did not return, and made `search` fail with a bare SQLite "datatype
- * mismatch".
+ * mismatch". Without a fallback an absent `--limit` stays absent, and the core
+ * applies its own default.
+ *
+ * @param {string | undefined} raw
+ * @param {number} [fallback]
  */
 function limitOf(raw, fallback) {
   if (raw === undefined) return fallback;
@@ -86,7 +102,10 @@ function main(argv) {
     return 0;
   }
 
-  const profile = options.profile ?? 'transitional';
+  const profile = options.profile;
+  if (profile !== undefined && !PROFILE_KEYS.includes(profile)) {
+    throw new UsageError(`--profile must be one of ${PROFILE_KEYS.join(', ')}, got "${profile}"`);
+  }
   // Indentation is for a human at a terminal. Piped into an agent's context it
   // is pure cost, and this tool is used in a loop.
   const indent = options.compact === true || !process.stdout.isTTY ? 0 : 2;
@@ -100,25 +119,11 @@ function main(argv) {
       return argument;
     };
 
+    if (Object.hasOwn(QNAME_COMMANDS, command)) {
+      emit(graph[QNAME_COMMANDS[command]](need('a name'), {profile}));
+      return 0;
+    }
     switch (command) {
-      case 'element':
-        emit(graph.element(need('a name'), {profile}));
-        return 0;
-      case 'type':
-        emit(graph.type(need('a name'), {profile}));
-        return 0;
-      case 'children':
-        emit(graph.children(need('a name'), {profile}));
-        return 0;
-      case 'attributes':
-        emit(graph.attributes(need('a name'), {profile}));
-        return 0;
-      case 'enum':
-        emit(graph.enum(need('a name'), {profile}));
-        return 0;
-      case 'values':
-        emit(graph.values(need('a name'), {profile}));
-        return 0;
       case 'namespace':
         emit(graph.namespace(need('a URI, prefix or vocabulary')));
         return 0;
@@ -126,7 +131,7 @@ function main(argv) {
         emit(
           graph.search(need('a substring'), {
             profile,
-            limit: limitOf(options.limit, 40),
+            limit: limitOf(options.limit),
           }),
         );
         return 0;
@@ -149,6 +154,16 @@ function main(argv) {
 }
 
 class UsageError extends Error {}
+
+/** The commands that take one name and a profile, and the core method that answers each. */
+const QNAME_COMMANDS = /** @type {const} */ ({
+  element: 'element',
+  type: 'type',
+  children: 'children',
+  attributes: 'attributes',
+  enum: 'enum',
+  values: 'values',
+});
 
 /**
  * The diagnostic, as JSON or as pasted text. JSON may be a whole

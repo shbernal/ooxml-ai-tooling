@@ -20,14 +20,14 @@ import {StdioServerTransport} from '@modelcontextprotocol/server/stdio';
 import {z} from 'zod';
 import pkg from '../package.json' with {type: 'json'};
 import {explainDiagnostic, parseDiagnosticText} from './explain.mjs';
-import {createGraph} from './graph.mjs';
+import {createGraph, PROFILE_KEYS} from './graph.mjs';
 import * as OUTPUT from './schemas.mjs';
 
 const graph = createGraph();
 const server = new McpServer({name: 'ooxml', version: pkg.version});
 
 const PROFILE = z
-  .enum(['transitional', 'strict'])
+  .enum(PROFILE_KEYS)
   .optional()
   .describe(
     'Which ECMA-376 profile to answer for. Default "transitional" — that is what Word, Excel ' +
@@ -53,9 +53,24 @@ const reply = (value) => ({
   content: [{type: /** @type {const} */ ('text'), text: JSON.stringify(value)}],
 });
 
-server.registerTool(
-  'ooxml_element',
+/** A call the tool refuses, as a tool error the client shows rather than a protocol error. */
+const fail = (text) => ({
+  isError: true,
+  content: [{type: /** @type {const} */ ('text'), text}],
+});
+
+/**
+ * The tools that take one name and a profile, and answer with the core method
+ * of the same name. Only the wording and the output schema differ between
+ * them. The descriptions are what a client's model reads to pick a tool, so
+ * they are the product, not boilerplate.
+ *
+ * @type {{name: string, method: 'element' | 'children' | 'attributes' | 'values' | 'enum' | 'type', title: string, description: string, output: any}[]}
+ */
+const NAME_TOOLS = [
   {
+    name: 'ooxml_element',
+    method: 'element',
     title: 'Look up an OOXML element or attribute',
     description:
       'The canonical record for a name: what kind of thing it is, the type it declares, its ' +
@@ -65,15 +80,11 @@ server.registerTool(
       'is declared locally inside many types and can carry a different type in each. If nothing ' +
       'matches, the reason distinguishes an unknown name from one that exists only in the other ' +
       'profile, because those need opposite next steps.',
-    inputSchema: z.object({qname: NAME, profile: PROFILE}),
-    outputSchema: OUTPUT.ELEMENT,
+    output: OUTPUT.ELEMENT,
   },
-  ({qname, profile = 'transitional'}) => reply(graph.element(qname, {profile})),
-);
-
-server.registerTool(
-  'ooxml_children',
   {
+    name: 'ooxml_children',
+    method: 'children',
     title: 'What may go inside this element, and in what order',
     description:
       "The legal content model: the sequence/choice/all tree with each node's own cardinality, " +
@@ -83,15 +94,11 @@ server.registerTool(
       'are expanded in place, which matters because many DrawingML types have no direct children ' +
       "at all and consist entirely of a group reference. Cardinalities are the reference site's: " +
       'min/max of -1 means unbounded. Accepts an element or a type name.',
-    inputSchema: z.object({qname: NAME, profile: PROFILE}),
-    outputSchema: OUTPUT.CHILDREN,
+    output: OUTPUT.CHILDREN,
   },
-  ({qname, profile = 'transitional'}) => reply(graph.children(qname, {profile})),
-);
-
-server.registerTool(
-  'ooxml_attributes',
   {
+    name: 'ooxml_attributes',
+    method: 'attributes',
     title: 'Attributes of an element or type',
     description:
       'Every attribute the type accepts, including ones inherited from a base type and ones ' +
@@ -100,15 +107,11 @@ server.registerTool(
       'whether it is written with a namespace prefix — that last one varies across OOXML and ' +
       'getting it wrong produces a document that looks right and does not load. An empty list is ' +
       'a real answer: plenty of OOXML types carry their properties as child elements instead.',
-    inputSchema: z.object({qname: NAME, profile: PROFILE}),
-    outputSchema: OUTPUT.ATTRIBUTES,
+    output: OUTPUT.ATTRIBUTES,
   },
-  ({qname, profile = 'transitional'}) => reply(graph.attributes(qname, {profile})),
-);
-
-server.registerTool(
-  'ooxml_values',
   {
+    name: 'ooxml_values',
+    method: 'values',
     title: 'The legal value space of a simple type',
     description:
       'What may actually be written: the base type, enumeration values, facets (pattern, ' +
@@ -117,41 +120,44 @@ server.registerTool(
       '"it restricts xsd:string" and the pattern the string has to match. Also handles the ' +
       'measure types, which are unions, and reports inline union alternatives that have no name ' +
       'of their own. Accepts a simple type, or an element/attribute whose type you want.',
-    inputSchema: z.object({qname: NAME, profile: PROFILE}),
-    outputSchema: OUTPUT.VALUES,
+    output: OUTPUT.VALUES,
   },
-  ({qname, profile = 'transitional'}) => reply(graph.values(qname, {profile})),
-);
-
-server.registerTool(
-  'ooxml_enum',
   {
+    name: 'ooxml_enum',
+    method: 'enum',
     title: 'Enumeration values of a simple type',
     description:
       'Just the enumerated values, in schema order. Narrower and cheaper than ooxml_values when ' +
       'you already know the type is an enumeration. If it is not enumerated this says so and ' +
       'points at ooxml_values rather than returning an empty list that reads like "no legal ' +
       'values".',
-    inputSchema: z.object({qname: NAME, profile: PROFILE}),
-    outputSchema: OUTPUT.ENUM,
+    output: OUTPUT.ENUM,
   },
-  ({qname, profile = 'transitional'}) => reply(graph.enum(qname, {profile})),
-);
-
-server.registerTool(
-  'ooxml_type',
   {
+    name: 'ooxml_type',
+    method: 'type',
     title: 'Describe a complexType or simpleType',
     description:
       'What a type derives from and by what relation (extension or restriction, and in which ' +
       'content model), plus a summary of its shape — its top-level compositors, how many direct ' +
       'children and group references it has, how many attributes. Use it to orient before ' +
       'asking for the full content model.',
-    inputSchema: z.object({qname: NAME, profile: PROFILE}),
-    outputSchema: OUTPUT.TYPE,
+    output: OUTPUT.TYPE,
   },
-  ({qname, profile = 'transitional'}) => reply(graph.type(qname, {profile})),
-);
+];
+
+for (const {name, method, title, description, output} of NAME_TOOLS) {
+  server.registerTool(
+    name,
+    {
+      title,
+      description,
+      inputSchema: z.object({qname: NAME, profile: PROFILE}),
+      outputSchema: output,
+    },
+    ({qname, profile}) => reply(graph[method](qname, {profile})),
+  );
+}
 
 server.registerTool(
   'ooxml_search',
@@ -169,7 +175,7 @@ server.registerTool(
     }),
     outputSchema: OUTPUT.SEARCH,
   },
-  ({text, profile = 'transitional', limit}) => reply(graph.search(text, {profile, limit})),
+  ({text, profile, limit}) => reply(graph.search(text, {profile, limit})),
 );
 
 server.registerTool(
@@ -244,18 +250,12 @@ server.registerTool(
     }),
     outputSchema: OUTPUT.EXPLAIN,
   },
-  ({id, description, xpath, partUri, text, profile = 'transitional'}) => {
+  ({id, description, xpath, partUri, text, profile}) => {
     if (text !== undefined) {
       if ([id, description, xpath, partUri].some((field) => field !== undefined)) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: /** @type {const} */ ('text'),
-              text: 'Pass either `text` or the structured fields (id, description, xpath, partUri), not both.',
-            },
-          ],
-        };
+        return fail(
+          'Pass either `text` or the structured fields (id, description, xpath, partUri), not both.',
+        );
       }
       return reply(explainDiagnostic(graph, parseDiagnosticText(text), {profile}));
     }

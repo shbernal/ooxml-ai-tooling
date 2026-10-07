@@ -42,6 +42,13 @@ runtime notices.
   `found: false` comes with `reason` and never with `symbols`. The answers
   themselves are unchanged.
 
+### Skill only
+
+- The CLI refuses a value-taking flag with no value. `ooxml element w:p
+  --profile` used to answer for Transitional without a word, and now exits 2
+  with usage. An unknown `--profile` value also exits 2 with usage, instead of
+  exiting 1 with a bare error.
+
 ## 0.0.5 — both surfaces
 
 ### Both surfaces
