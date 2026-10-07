@@ -314,6 +314,10 @@ const ATTRIBUTE = shared(
   'Attribute',
   z.strictObject({
     name: z.string(),
+    qname: z
+      .string()
+      .optional()
+      .describe('Qualified attributes only: the prefixed name a document writes, e.g. r:id.'),
     qualified: z.boolean(),
     use: z.enum(['optional', 'required', 'prohibited']),
     type: TYPE_REF.nullable(),

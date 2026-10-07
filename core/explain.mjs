@@ -337,11 +337,18 @@ function resolveLegal(graph, answer, element, named, profile, steps = []) {
       // type's name.
       const lists = attributes.variants ?? [attributes];
       const wanted = localPart(named);
+      let sharedName = false;
       for (const list of lists) {
-        // The validator writes the attribute prefixed (`w:firstLine`); the
-        // schema stores the local name. Compare on the local part or a
-        // correctly-named attribute reads as missing.
-        const match = list.attributes.find((a) => a.name === named || a.name === wanted);
+        // The validator writes a qualified attribute prefixed (`w:firstLine`,
+        // `r:id`) and an unqualified one bare (`id`), which is exactly the
+        // attribute's `qname ?? name`. Falling back to the local part keeps a
+        // differently-prefixed spelling working, but only when the local part
+        // names one attribute: `id` and `r:id` share it on a slide list entry.
+        const candidates = list.attributes.filter((a) => a.name === wanted);
+        const match =
+          candidates.find((a) => (a.qname ?? a.name) === named) ??
+          (candidates.length === 1 ? candidates[0] : undefined);
+        if (match === undefined && candidates.length > 1) sharedName = true;
         if (match !== undefined && match.type !== null && match.type.builtin === false) {
           return {
             kind: 'attribute_values',
@@ -356,7 +363,9 @@ function resolveLegal(graph, answer, element, named, profile, steps = []) {
       }
       return {
         kind: 'attributes',
-        note: `${element} has no attribute named '${named}' at all — check the name before the value.`,
+        note: sharedName
+          ? `${element} has more than one attribute named '${wanted}', and '${named}' does not pick one. Each is listed below with its qname.`
+          : `${element} has no attribute named '${named}' at all — check the name before the value.`,
         ...attributes,
       };
     }

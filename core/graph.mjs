@@ -800,16 +800,30 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
           collect(base.base_symbol_id, display(symbolById(base.base_symbol_id)), depth + 1);
         }
 
+        // A `ref` attribute declares nothing itself: its type is on the global
+        // attribute it names, and so is its namespace. Read both through the
+        // ref, or `r:id` comes back untyped and indistinguishable from `id`.
+        const owner = symbolById(symbolId).vocabulary;
         for (const row of handle.all(
-          `SELECT local_name, attr_use, is_qualified, default_value, fixed_value,
-                type_ref, type_symbol_id, attr_symbol_id, order_index
-           FROM attr_edges WHERE symbol_id = ? AND profile_id = ? ORDER BY order_index`,
+          `SELECT e.local_name, e.attr_use, e.is_qualified, e.default_value, e.fixed_value,
+                  COALESCE(e.type_ref, a.type_ref) AS type_ref,
+                  COALESCE(e.type_symbol_id, a.type_symbol_id) AS type_symbol_id,
+                  v.key AS ref_vocabulary
+             FROM attr_edges e
+             LEFT JOIN symbols a ON a.id = e.attr_symbol_id
+             LEFT JOIN vocabularies v ON v.id = a.vocabulary_id
+            WHERE e.symbol_id = ? AND e.profile_id = ? ORDER BY e.order_index`,
           symbolId,
           pid,
         )) {
+          const qualified = row.is_qualified === 1;
+          const vocabulary = row.ref_vocabulary ?? (qualified ? owner : null);
           collected.push({
             name: row.local_name,
-            qualified: row.is_qualified === 1,
+            // The spelling a document uses. Absent on an unqualified attribute,
+            // which is in no namespace and is written bare.
+            ...(vocabulary === null ? {} : {qname: formatQName(vocabulary, row.local_name, index)}),
+            qualified,
             use: row.attr_use,
             type: describeType(row.type_ref, row.type_symbol_id),
             ...(row.default_value === null ? {} : {default: row.default_value}),
@@ -834,11 +848,18 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       collect(rootSymbolId, null, 0);
 
       // A derived type redeclaring an inherited attribute wins; it was
-      // collected later, so the last write is the right one.
-      const byName = new Map();
-      for (const attribute of collected) byName.set(attribute.name, attribute);
+      // collected later, so the last write is the right one. Keyed on the
+      // namespace too: `id` and `r:id` on a slide list entry are two
+      // attributes, not one declared twice.
+      const byIdentity = new Map();
+      for (const attribute of collected)
+        byIdentity.set(attribute.qname ?? attribute.name, attribute);
       return {
-        list: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'en')),
+        list: [...byIdentity.values()].sort(
+          (a, b) =>
+            a.name.localeCompare(b.name, 'en') ||
+            (a.qname ?? '').localeCompare(b.qname ?? '', 'en'),
+        ),
         truncated: state.truncated,
       };
     };

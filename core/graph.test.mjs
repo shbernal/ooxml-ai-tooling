@@ -251,6 +251,48 @@ describe('attributes', () => {
     }
   });
 
+  test('keeps attributes that share a local name apart, each with its type', () => {
+    // The attribute pair every pptx slide list carries: a bare `id` and the
+    // relationship `r:id`, which is declared by ref.
+    const result = graph.attributes('p:sldId');
+    assert.equal(result.count, 2);
+    const byQName = Object.fromEntries(result.attributes.map((a) => [a.qname ?? a.name, a]));
+    assert.equal(byQName.id.type.qname, 'p:ST_SlideId');
+    assert.equal(byQName['r:id'].type.qname, 'r:ST_RelationshipId');
+  });
+
+  test('a ref attribute carries the type of the attribute it refers to', () => {
+    const {handle, display} = graph._internal;
+    const typedRefs = new Set(
+      handle
+        .all(
+          `SELECT DISTINCT a.id FROM attr_edges e JOIN symbols a ON a.id = e.attr_symbol_id
+            WHERE a.type_ref IS NOT NULL`,
+        )
+        .map((row) => display(graph._internal.symbolById(row.id))),
+    );
+    assert.ok(typedRefs.has('r:id'));
+    const owners = handle.all(
+      `SELECT DISTINCT e.symbol_id AS id FROM attr_edges e
+         JOIN symbols s ON s.id = e.symbol_id
+        WHERE e.attr_symbol_id IS NOT NULL AND s.kind = 'complexType'`,
+    );
+    assert.ok(owners.length > 0);
+    for (const {id} of owners) {
+      const name = display(graph._internal.symbolById(id));
+      for (const profile of ['transitional', 'strict']) {
+        const result = graph.attributes(name, {profile});
+        if (result.found !== true) continue;
+        for (const list of result.variants ?? [result]) {
+          for (const attribute of list.attributes) {
+            if (!typedRefs.has(attribute.qname)) continue;
+            assert.notEqual(attribute.type, null, `${attribute.qname} on ${name} in ${profile}`);
+          }
+        }
+      }
+    }
+  });
+
   test('expands attributeGroup refs into the attributes they carry', () => {
     // vml's CT_Shape reaches most of its attributes through five
     // attributeGroups; unexpanded, this type looks nearly attribute-free.

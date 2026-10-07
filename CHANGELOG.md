@@ -19,6 +19,15 @@ runtime notices.
   array and a message naming the call that answers it, for example
   `type('w:CT_P')` or `children('w:p')`. `not_in_profile` now means the name
   exists as a kind the tool takes, but only in the other profile.
+- **Attributes declared by `ref` carry their type.** About 200 attribute uses
+  name a global attribute instead of declaring one, `r:id` among them, and they
+  came back `type: null`. They now carry the referenced attribute's type.
+- **Attributes that share a local name are no longer merged.** `p:sldId` has a
+  bare `id` and an `r:id`, and `attributes` returned one `id` that mixed the
+  two. Each qualified attribute now carries a `qname`, the prefixed name a
+  document writes (`w:left`, `r:id`), and attributes are told apart by it.
+  `explain` matches a diagnostic's attribute name against that `qname` first,
+  so `'r:id'` resolves to the relationship id's value space.
 
 ### npm only
 

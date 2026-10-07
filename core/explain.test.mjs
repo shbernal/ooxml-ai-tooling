@@ -187,6 +187,26 @@ describe('explain', () => {
     assert.ok(result.legal.values.one_of.length > 0);
   });
 
+  test('tells a prefixed attribute from a bare one with the same local name', () => {
+    const xpath = '/p:presentation[1]/p:sldIdLst[1]/p:sldId[1]';
+    const ref = explainDiagnostic(graph, {
+      id: 'Sch_InvalidAttributeValue',
+      description: "The attribute 'r:id' has invalid value ''.",
+      xpath,
+    });
+    assert.equal(ref.legal.kind, 'attribute_values');
+    assert.equal(ref.legal.attribute.qname, 'r:id');
+    assert.equal(ref.legal.values.type, 'r:ST_RelationshipId');
+
+    const bare = explainDiagnostic(graph, {
+      id: 'Sch_InvalidAttributeValue',
+      description: "The attribute 'id' has invalid value 'x'.",
+      xpath,
+    });
+    assert.equal(bare.legal.attribute.qname, undefined);
+    assert.equal(bare.legal.values.type, 'p:ST_SlideId');
+  });
+
   test('says which attribute does not exist when the name itself is wrong', () => {
     const result = explainDiagnostic(graph, {
       id: 'Sch_AttributeValueDataTypeDetailed',
