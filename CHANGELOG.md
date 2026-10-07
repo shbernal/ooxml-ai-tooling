@@ -13,6 +13,11 @@ runtime notices.
 - The server runs on the v2 MCP TypeScript SDK (`@modelcontextprotocol/server`),
   replacing `@modelcontextprotocol/sdk` 1.x. The tools, their schemas and the
   stdio transport are unchanged, and the install pulls in far fewer packages.
+- Each tool's output schema is now the union of its response shapes, listed as
+  `anyOf`, rather than one object with every field optional. A client that
+  reads the schema now sees which fields go together, for example that
+  `found: false` comes with `reason` and never with `symbols`. The answers
+  themselves are unchanged.
 
 ## 0.0.5 — both surfaces
 

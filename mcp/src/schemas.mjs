@@ -11,54 +11,28 @@
  * MCP-only, because it needs zod and the core has no runtime dependencies. It
  * is not in `CORE_FILES` and is not vendored anywhere.
  *
- * ## Why every tool's schema is one object
+ * ## Why every tool's schema is a union
  *
- * MCP requires an output schema to be an object, and the SDK drops anything
- * else without a word: a `z.union` is not listed and not checked. So each tool
- * gets `oneOf`, which lists every field any of its shapes carries — that is
- * what a client sees — and then refines on the exact union, which is what the
- * server enforces.
+ * Each tool's schema is the exact union of its response shapes, so a client
+ * sees which fields go together, not one object where every field is optional.
+ * The SDK advertises a union as `anyOf` under a top-level `type: "object"`,
+ * which is what MCP requires of an output schema, and checks results against
+ * the whole union.
  *
- * Every field the core writes must be named here. The advertised JSON Schema
- * says `additionalProperties: false`, so a client that validates against it
- * rejects an unnamed field even though the server's own check strips it and
- * passes. `mcp/schemas.test.mjs` runs the whole corpus through these to catch
- * exactly that.
+ * Every field the core writes must be named here. Every shape is strict, and
+ * the advertised JSON Schema says `additionalProperties: false`, so an unnamed
+ * field fails the server's check and a client's. `mcp/schemas.test.mjs` runs
+ * the whole corpus through these to catch exactly that.
  */
 import {z} from 'zod';
 
 /**
- * One object schema over several response shapes.
- *
- * A field present in every shape is required; one present in only some is
- * optional. A field whose schema differs between shapes is the union of them —
- * which is how `found` comes out as `true | false`, and why shapes share field
- * schemas by identity where they mean the same thing.
+ * One tool's schema: the union of its response shapes.
  *
  * @param {string} description
- * @param {z.ZodObject[]} shapes
+ * @param {[z.ZodType, ...z.ZodType[]]} shapes
  */
-export function oneOf(description, shapes) {
-  const exact = z.union(shapes);
-  const keys = [...new Set(shapes.flatMap((shape) => Object.keys(shape.shape)))];
-  /** @type {Record<string, z.ZodType>} */
-  const fields = {};
-  for (const key of keys) {
-    const present = shapes.map((shape) => shape.shape[key]).filter((f) => f !== undefined);
-    const inner = [...new Set(present.map((f) => (f instanceof z.ZodOptional ? f.unwrap() : f)))];
-    const field = inner.length === 1 ? inner[0] : z.union(inner);
-    const optional =
-      present.length < shapes.length || present.some((f) => f instanceof z.ZodOptional);
-    fields[key] = optional ? field.optional() : field;
-  }
-  return z
-    .object(fields)
-    .describe(description)
-    .superRefine((value, context) => {
-      const result = exact.safeParse(value);
-      if (!result.success) for (const issue of result.error.issues) context.addIssue({...issue});
-    });
-}
+const oneOf = (description, shapes) => z.union(shapes).describe(description);
 
 // ---------------------------------------------------------------- shared ---
 
@@ -483,20 +457,24 @@ export const DIFF_PROFILES = oneOf('ooxml_diff_profiles: what Transitional adds 
 /** A variant `explain` picked by walking the xpath. */
 const NARROWED = {narrowed_by: z.string().optional()};
 
-const LEGAL = z.union([
-  ...[CHILDREN_FOUND.extend(NARROWED), CHILDREN_AMBIGUOUS, NO_CONTENT_MODEL].map((shape) =>
-    shape.extend({kind: z.literal('children')}),
-  ),
-  ...[ATTRIBUTES_FOUND.extend(NARROWED), ATTRIBUTES_AMBIGUOUS, NO_CONTENT_MODEL].map((shape) =>
-    shape.extend({kind: z.literal('attributes'), note: z.string().optional()}),
-  ),
-  z.strictObject({
-    kind: z.literal('attribute_values'),
-    attribute: ATTRIBUTE,
-    on: z.string(),
-    values: z.union([VALUES_FOUND, VALUES_AMBIGUOUS, NOT_FOUND]).nullable(),
-  }),
-]);
+/** Shared because two of the answers below carry it. */
+const LEGAL = shared(
+  'Legal',
+  z.union([
+    ...[CHILDREN_FOUND.extend(NARROWED), CHILDREN_AMBIGUOUS, NO_CONTENT_MODEL].map((shape) =>
+      shape.extend({kind: z.literal('children')}),
+    ),
+    ...[ATTRIBUTES_FOUND.extend(NARROWED), ATTRIBUTES_AMBIGUOUS, NO_CONTENT_MODEL].map((shape) =>
+      shape.extend({kind: z.literal('attributes'), note: z.string().optional()}),
+    ),
+    z.strictObject({
+      kind: z.literal('attribute_values'),
+      attribute: ATTRIBUTE,
+      on: z.string(),
+      values: z.union([VALUES_FOUND, VALUES_AMBIGUOUS, NOT_FOUND]).nullable(),
+    }),
+  ]),
+);
 
 const EXPLAINED = {
   diagnostic: z.strictObject({

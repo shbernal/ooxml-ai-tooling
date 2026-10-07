@@ -97,8 +97,9 @@ check('every tool is registered', () => {
 });
 
 check('every tool advertises an object output schema', () => {
-  // MCP requires an object here, and the SDK lists nothing at all for a
-  // schema it cannot read as one, so a missing schema is the failure to catch.
+  // MCP requires an object here. Each schema is a union of response shapes,
+  // which the SDK lists as `anyOf` under `type: "object"`; this catches an SDK
+  // that stops doing that.
   for (const tool of listed.result.tools) {
     assert.equal(tool.outputSchema?.type, 'object', `${tool.name} has no output schema`);
   }

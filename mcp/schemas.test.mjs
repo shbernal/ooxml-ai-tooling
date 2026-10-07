@@ -6,10 +6,11 @@
  * asks every tool about every name in the database, in both profiles, plus the
  * misses and the diagnostics, and checks two things per answer:
  *
- * - it passes the exact union, which is what the server enforces; and
+ * - it passes the union, which is what the server enforces; and
  * - parsing dropped nothing, which is what a client validating against the
- *   advertised JSON Schema (`additionalProperties: false`) enforces. The SDK's
- *   own check strips unnamed fields and passes, so only this catches them.
+ *   advertised JSON Schema (`additionalProperties: false`) enforces. A
+ *   non-strict object nested in a shape strips an unnamed field and passes the
+ *   server's check, so only this catches it.
  */
 import assert from 'node:assert/strict';
 import {after, describe, test} from 'node:test';
@@ -148,7 +149,7 @@ describe('every answer conforms to its output schema', () => {
   });
 });
 
-describe('the exact union is enforced, not just the advertised superset', () => {
+describe('each shape is enforced whole, not field by field', () => {
   test('found: true without its answer is refused', () => {
     assert.equal(
       OUTPUT.ELEMENT.safeParse({query: 'x', profile: 'strict', found: true}).success,
