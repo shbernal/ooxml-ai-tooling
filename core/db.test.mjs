@@ -12,6 +12,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {before, describe, test} from 'node:test';
 import {buildDatabase} from '../build/build-db.mjs';
 import {EXPECTED_APPLICATION_ID, EXPECTED_USER_VERSION, openGraph} from './db.mjs';
+import {silenceSqliteExperimentalWarning} from './warnings.mjs';
 
 const DB = 'core/data/ooxml.db';
 
@@ -60,5 +61,29 @@ describe('openGraph', () => {
 
   test('a missing database says how to build one', () => {
     assert.throws(() => openGraph('.tmp/does-not-exist.db'), /make db/);
+  });
+});
+
+describe('the SQLite warning filter', () => {
+  test('installs once, however often a graph is opened', async () => {
+    silenceSqliteExperimentalWarning();
+    const listeners = process.listeners('warning').length;
+    silenceSqliteExperimentalWarning();
+    openGraph(DB).close();
+    assert.equal(process.listeners('warning').length, listeners);
+
+    // Any other warning still reaches a listener, exactly once.
+    let received = 0;
+    const listener = (warning) => {
+      if (warning.message === 'not the SQLite one') received += 1;
+    };
+    process.on('warning', listener);
+    try {
+      process.emitWarning('not the SQLite one');
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(received, 1);
+    } finally {
+      process.off('warning', listener);
+    }
   });
 });

@@ -23,7 +23,15 @@
  * was listening, including Node's own printer. We are hiding one known-benign
  * message, not going quiet.
  */
+let installed = false;
+
+/**
+ * Installs the filter once per process. Every `openGraph()` calls this, and
+ * installing again would wrap the previous filter in a new one each time.
+ */
 export function silenceSqliteExperimentalWarning() {
+  if (installed) return;
+  installed = true;
   const existing = process.listeners('warning');
   process.removeAllListeners('warning');
   process.on('warning', (warning) => {
