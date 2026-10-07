@@ -122,6 +122,10 @@ friends). They pull in documentation outside the standard we model. And the
 behaviour corpus that is easy to get is mostly about xlsx, which would skew a
 tool that has to serve wml, sml, pml and dml equally.
 
+**No preset shape geometry.** Part 1 Annex D's preset shape definitions are a
+separate addendum with their own format. Ingesting them would take a second
+ingest and add nothing to the schema graph. Revisit only if a consumer asks.
+
 The graph holds one thing from outside ECMA-376: the Dublin Core elements that
 Part 2's core properties reference. They are untyped, and their vocabulary's
 `external_source` says where they are defined. Do not "complete" them by
