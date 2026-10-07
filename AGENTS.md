@@ -175,8 +175,9 @@ Other reasons:
 ## The vendoring rule
 
 `core/` is the only implementation. Every file under `skill/scripts/` and
-`mcp/src/` named in the Makefile's `CORE_FILES` is a byte-identical copy of a
-core file, the built database included.
+`mcp/src/` named in `CORE_FILES` in `build/vendor.mjs` is a byte-identical copy
+of a core file, the built database included. That list is the only one: the
+copy, the check and the tests all read it.
 
 - **Never edit a vendored copy directly.** Edit the core, then run
   `make sync-core`.

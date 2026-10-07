@@ -1,17 +1,3 @@
-# The shipped core: the implementation modules and the built database they query.
-# Every one is copied byte-identically into both surfaces. The tests and
-# everything under build/ are deliberately absent — they are development-only and
-# must never reach a surface.
-CORE_FILES := \
-	db.mjs \
-	warnings.mjs \
-	qname.mjs \
-	graph.mjs \
-	explain.mjs \
-	data/ooxml.db
-
-VENDOR_DIRS := skill/scripts mcp/src
-
 .PHONY: db readme-art dump check-schemas sync-core check-vendor test verify smoke help
 
 help:
@@ -49,15 +35,9 @@ check-schemas:
 	node build/check-schemas.mjs
 
 # Deliberately not automatic. Vendoring is a decision to record in the commit,
-# not a side effect of one.
+# not a side effect of one. build/vendor.mjs holds the list of shipped files.
 sync-core:
-	@for dir in $(VENDOR_DIRS); do \
-		for file in $(CORE_FILES); do \
-			mkdir -p "$$dir/$$(dirname $$file)"; \
-			cp "core/$$file" "$$dir/$$file"; \
-		done; \
-		echo "wrote $$dir ($(words $(CORE_FILES)) files)"; \
-	done
+	@node build/vendor.mjs
 
 # In Node rather than a shell `cmp` loop, because the .db has to be compared by
 # canonical dump rather than by bytes. build/check-vendor.mjs explains why.

@@ -14,8 +14,12 @@
 import {DatabaseSync} from 'node:sqlite';
 import {silenceSqliteExperimentalWarning} from './warnings.mjs';
 
-/** Must match `build/build-db.mjs`. Bumped whenever `build/schema.sql` changes. */
+/**
+ * Bumped whenever `build/schema.sql` changes. `build/build-db.mjs` writes these
+ * same values, so they are stated once, here.
+ */
 export const EXPECTED_USER_VERSION = 2;
+/** 'OOX1' as a big-endian int32 — `file`-style magic for a SQLite payload. */
 export const EXPECTED_APPLICATION_ID = 0x4f4f5831;
 
 export const DEFAULT_DB_PATH = new URL('./data/ooxml.db', import.meta.url);

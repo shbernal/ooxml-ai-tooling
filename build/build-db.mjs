@@ -14,16 +14,14 @@ import {mkdirSync, readFileSync, rmSync, statSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {fileURLToPath} from 'node:url';
+import {
+  EXPECTED_APPLICATION_ID as APPLICATION_ID,
+  EXPECTED_USER_VERSION as USER_VERSION,
+} from '../core/db.mjs';
 import {buildResolver, declareSymbols, parseProfiles, writeEdges, writeSymbols} from './ingest.mjs';
 import {buildNamespaceIndex, listSchemaFiles} from './parse.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-/** Bumped on any change to build/schema.sql. core/ refuses a database it does not know. */
-export const USER_VERSION = 2;
-
-/** 'OOX1' as a big-endian int32 — `file`-style magic for a SQLite payload. */
-export const APPLICATION_ID = 0x4f4f5831;
 
 /**
  * Part 2's packaging schemas belong to both profiles. A Strict package and a

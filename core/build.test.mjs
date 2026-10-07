@@ -8,7 +8,7 @@
  * instead of as silence.
  *
  * These live in core/ because that is what `pnpm test` runs, but they are not
- * vendored — `CORE_FILES` in the Makefile is the shipped set and no test is in
+ * vendored — `CORE_FILES` in build/vendor.mjs is the shipped set and no test is in
  * it.
  */
 import assert from 'node:assert/strict';
@@ -29,9 +29,14 @@ import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {after, before, describe, test} from 'node:test';
-import {APPLICATION_ID, buildDatabase, USER_VERSION} from '../build/build-db.mjs';
-import {CORE_FILES, checkVendor} from '../build/check-vendor.mjs';
+import {buildDatabase} from '../build/build-db.mjs';
+import {checkVendor} from '../build/check-vendor.mjs';
 import {dumpDatabase} from '../build/dump.mjs';
+import {CORE_FILES} from '../build/vendor.mjs';
+import {
+  EXPECTED_APPLICATION_ID as APPLICATION_ID,
+  EXPECTED_USER_VERSION as USER_VERSION,
+} from './db.mjs';
 
 const DB = 'core/data/ooxml.db';
 const GOLDEN = 'core/fixtures/graph.json';

@@ -8,8 +8,8 @@
  * One `import {z} from 'zod'` in the core would break every skill install and
  * pass every other test in the repo.
  *
- * This test lives in `core/` and is deliberately **not** in the Makefile's
- * `CORE_FILES`, so it is never vendored and `skill/scripts/` stays at exactly
+ * This test lives in `core/` and is deliberately **not** in `CORE_FILES` in
+ * `build/vendor.mjs`, so it is never vendored and `skill/scripts/` stays at exactly
  * the files it publishes.
  */
 import assert from 'node:assert/strict';
@@ -18,7 +18,7 @@ import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {before, describe, test} from 'node:test';
 import {buildDatabase} from '../build/build-db.mjs';
-import {CORE_FILES} from '../build/check-vendor.mjs';
+import {CORE_FILES} from '../build/vendor.mjs';
 
 const SKILL = 'skill/scripts';
 const CLI = join(SKILL, 'ooxml.mjs');

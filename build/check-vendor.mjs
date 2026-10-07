@@ -28,20 +28,9 @@ import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {buildDatabase} from './build-db.mjs';
 import {dumpDatabase} from './dump.mjs';
+import {CORE_FILES, VENDOR_DIRS} from './vendor.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-/** Kept in step with the Makefile's CORE_FILES — the Makefile is the source of truth. */
-export const CORE_FILES = [
-  'db.mjs',
-  'warnings.mjs',
-  'qname.mjs',
-  'graph.mjs',
-  'explain.mjs',
-  'data/ooxml.db',
-];
-
-const VENDOR_DIRS = ['skill/scripts', 'mcp/src'];
 
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
