@@ -16,7 +16,7 @@ import {fileURLToPath} from 'node:url';
 // The version current clients negotiate, from the installed SDK rather than a
 // literal: a pinned old version tests a compatibility path, and breaks on the
 // SDK bump that finally drops it.
-import {LATEST_PROTOCOL_VERSION} from '@modelcontextprotocol/sdk/types.js';
+import {LATEST_PROTOCOL_VERSION} from '@modelcontextprotocol/server';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER = join(HERE, 'src', 'server.mjs');

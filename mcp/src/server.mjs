@@ -15,8 +15,8 @@
  * this project is not making, and a hosted OOXML schema service already exists
  * (ooxml.dev). The README says so rather than half-building an alternative.
  */
-import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
-import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
+import {McpServer} from '@modelcontextprotocol/server';
+import {StdioServerTransport} from '@modelcontextprotocol/server/stdio';
 import {z} from 'zod';
 import pkg from '../package.json' with {type: 'json'};
 import {explainDiagnostic, parseDiagnosticText} from './explain.mjs';
@@ -65,7 +65,7 @@ server.registerTool(
       'is declared locally inside many types and can carry a different type in each. If nothing ' +
       'matches, the reason distinguishes an unknown name from one that exists only in the other ' +
       'profile, because those need opposite next steps.',
-    inputSchema: {qname: NAME, profile: PROFILE},
+    inputSchema: z.object({qname: NAME, profile: PROFILE}),
     outputSchema: OUTPUT.ELEMENT,
   },
   ({qname, profile = 'transitional'}) => reply(graph.element(qname, {profile})),
@@ -83,7 +83,7 @@ server.registerTool(
       'are expanded in place, which matters because many DrawingML types have no direct children ' +
       "at all and consist entirely of a group reference. Cardinalities are the reference site's: " +
       'min/max of -1 means unbounded. Accepts an element or a type name.',
-    inputSchema: {qname: NAME, profile: PROFILE},
+    inputSchema: z.object({qname: NAME, profile: PROFILE}),
     outputSchema: OUTPUT.CHILDREN,
   },
   ({qname, profile = 'transitional'}) => reply(graph.children(qname, {profile})),
@@ -100,7 +100,7 @@ server.registerTool(
       'whether it is written with a namespace prefix — that last one varies across OOXML and ' +
       'getting it wrong produces a document that looks right and does not load. An empty list is ' +
       'a real answer: plenty of OOXML types carry their properties as child elements instead.',
-    inputSchema: {qname: NAME, profile: PROFILE},
+    inputSchema: z.object({qname: NAME, profile: PROFILE}),
     outputSchema: OUTPUT.ATTRIBUTES,
   },
   ({qname, profile = 'transitional'}) => reply(graph.attributes(qname, {profile})),
@@ -117,7 +117,7 @@ server.registerTool(
       '"it restricts xsd:string" and the pattern the string has to match. Also handles the ' +
       'measure types, which are unions, and reports inline union alternatives that have no name ' +
       'of their own. Accepts a simple type, or an element/attribute whose type you want.',
-    inputSchema: {qname: NAME, profile: PROFILE},
+    inputSchema: z.object({qname: NAME, profile: PROFILE}),
     outputSchema: OUTPUT.VALUES,
   },
   ({qname, profile = 'transitional'}) => reply(graph.values(qname, {profile})),
@@ -132,7 +132,7 @@ server.registerTool(
       'you already know the type is an enumeration. If it is not enumerated this says so and ' +
       'points at ooxml_values rather than returning an empty list that reads like "no legal ' +
       'values".',
-    inputSchema: {qname: NAME, profile: PROFILE},
+    inputSchema: z.object({qname: NAME, profile: PROFILE}),
     outputSchema: OUTPUT.ENUM,
   },
   ({qname, profile = 'transitional'}) => reply(graph.enum(qname, {profile})),
@@ -147,7 +147,7 @@ server.registerTool(
       'content model), plus a summary of its shape — its top-level compositors, how many direct ' +
       'children and group references it has, how many attributes. Use it to orient before ' +
       'asking for the full content model.',
-    inputSchema: {qname: NAME, profile: PROFILE},
+    inputSchema: z.object({qname: NAME, profile: PROFILE}),
     outputSchema: OUTPUT.TYPE,
   },
   ({qname, profile = 'transitional'}) => reply(graph.type(qname, {profile})),
@@ -162,11 +162,11 @@ server.registerTool(
       'semantic one — there are no embeddings here by design, so it will not find "how do I ' +
       'make text bold". Use it when you half-remember a name. For prose-level search over the ' +
       'specification text, this project deliberately does not compete: ooxml.dev does that.',
-    inputSchema: {
+    inputSchema: z.object({
       text: z.string().describe('A substring of the name, e.g. "tblPr" or "ST_Border".'),
       profile: PROFILE,
       limit: z.number().int().positive().max(200).optional().describe('Default 40.'),
-    },
+    }),
     outputSchema: OUTPUT.SEARCH,
   },
   ({text, profile = 'transitional', limit}) => reply(graph.search(text, {profile, limit})),
@@ -180,9 +180,9 @@ server.registerTool(
       'Maps between namespace URIs, conventional prefixes and vocabularies, in both directions ' +
       'and for both profiles. The common use is working out which profile a document is in from ' +
       'a namespace URI it declares, or which URI to write for a prefix.',
-    inputSchema: {
+    inputSchema: z.object({
       query: z.string().describe('A namespace URI, a prefix like "w", or a vocabulary like "wml".'),
-    },
+    }),
     outputSchema: OUTPUT.NAMESPACE,
   },
   ({query}) => reply(graph.namespace(query)),
@@ -197,7 +197,7 @@ server.registerTool(
       'attribute counts, enumeration values and union members. Strict is a subset — every ' +
       'difference is something Transitional adds back for legacy compatibility — so this ' +
       'answers "will this still be valid in Strict".',
-    inputSchema: {qname: NAME},
+    inputSchema: z.object({qname: NAME}),
     outputSchema: OUTPUT.DIFF_PROFILES,
   },
   ({qname}) => reply(graph.diff_profiles(qname)),
@@ -218,7 +218,7 @@ server.registerTool(
       'of the structured fields: the id, xpath and quoted names are recovered from it where ' +
       'present. This tool CONSUMES validator output; it does not validate anything, and nothing ' +
       'needs to be installed for it.',
-    inputSchema: {
+    inputSchema: z.object({
       id: z.string().optional().describe('The Open XML SDK id, e.g. "Sch_UndeclaredAttribute".'),
       description: z
         .string()
@@ -241,7 +241,7 @@ server.registerTool(
             'id, description, xpath and partUri, not alongside them.',
         ),
       profile: PROFILE,
-    },
+    }),
     outputSchema: OUTPUT.EXPLAIN,
   },
   ({id, description, xpath, partUri, text, profile = 'transitional'}) => {

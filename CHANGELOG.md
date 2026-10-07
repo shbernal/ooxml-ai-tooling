@@ -8,6 +8,12 @@ This file ships in neither artifact. It is where a breaking change is announced,
 because nothing else announces one — there are no deprecation shims and no
 runtime notices.
 
+## Unreleased — npm only
+
+- The server runs on the v2 MCP TypeScript SDK (`@modelcontextprotocol/server`),
+  replacing `@modelcontextprotocol/sdk` 1.x. The tools, their schemas and the
+  stdio transport are unchanged, and the install pulls in far fewer packages.
+
 ## 0.0.5 — both surfaces
 
 ### Both surfaces
