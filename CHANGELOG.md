@@ -8,7 +8,7 @@ This file ships in neither artifact. It is where a breaking change is announced,
 because nothing else announces one — there are no deprecation shims and no
 runtime notices.
 
-## Unreleased
+## 0.0.6 — both surfaces
 
 ### Both surfaces
 
