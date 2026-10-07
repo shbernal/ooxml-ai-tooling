@@ -36,6 +36,12 @@
  * `AGENTS.md` holds.
  */
 
+import {DEFAULT_PROFILE} from './graph.mjs';
+
+/** The quoted name in an SDK message about an element or an attribute. */
+const ELEMENT_NAME = /element '([^']+)'/;
+const ATTRIBUTE_NAME = /attribute '([^']+)'/;
+
 /**
  * Diagnostic classes this resolves, and how to read each one.
  *
@@ -79,7 +85,7 @@ const DIAGNOSTICS = {
   Sch_AttributeValueDataTypeDetailed: {
     finding: 'invalid_attribute_value',
     answer: 'attribute_values',
-    extract: /attribute '([^']+)'/,
+    extract: ATTRIBUTE_NAME,
     summary: (name, position) =>
       name === null
         ? `An attribute value on ${position} is outside the value space of its type. Which attribute could not be read from the diagnostic, so every attribute it accepts is listed below, with its type.`
@@ -88,7 +94,7 @@ const DIAGNOSTICS = {
   Sch_InvalidAttributeValue: {
     finding: 'invalid_attribute_value',
     answer: 'attribute_values',
-    extract: /attribute '([^']+)'/,
+    extract: ATTRIBUTE_NAME,
     summary: (name, position) =>
       name === null
         ? `An attribute value on ${position} is not legal. Which attribute could not be read from the diagnostic, so every attribute it accepts is listed below, with its type.`
@@ -97,7 +103,7 @@ const DIAGNOSTICS = {
   Sch_UnexpectedElementContentExpectingComplex: {
     finding: 'unexpected_child',
     answer: 'children',
-    extract: /element '([^']+)'/,
+    extract: ELEMENT_NAME,
     summary: (name, position) =>
       name === null
         ? `Something inside ${position} is not legal at that position. The legal content model is below, in order.`
@@ -106,7 +112,7 @@ const DIAGNOSTICS = {
   Sch_UnexpectedElementQNameOrText: {
     finding: 'unexpected_child',
     answer: 'children',
-    extract: /element '([^']+)'/,
+    extract: ELEMENT_NAME,
     summary: (name, position) =>
       name === null
         ? `${position} does not accept the content found there. The legal content model is below, in order.`
@@ -115,14 +121,14 @@ const DIAGNOSTICS = {
   Sch_IncompleteContentExpectingComplex: {
     finding: 'incomplete_content',
     answer: 'children',
-    extract: /element '([^']+)'/,
+    extract: ELEMENT_NAME,
     summary: (_name, position) =>
       `${position} is missing required content. The content model below shows what is required and in what order.`,
   },
   Sch_EmptyContentExpectingComplex: {
     finding: 'incomplete_content',
     answer: 'children',
-    extract: /element '([^']+)'/,
+    extract: ELEMENT_NAME,
     summary: (_name, position) =>
       `${position} is empty but its content model requires children, listed below.`,
   },
@@ -202,7 +208,7 @@ export function parseDiagnosticText(text) {
 /**
  * @param {{id?: string, description?: string, partUri?: string, xpath?: string}} diagnostic
  */
-export function explainDiagnostic(graph, diagnostic, {profile = 'transitional'} = {}) {
+export function explainDiagnostic(graph, diagnostic, {profile = DEFAULT_PROFILE} = {}) {
   const id = diagnostic?.id ?? null;
   const description = diagnostic?.description ?? '';
   const {steps, element, truncated} = parseDiagnosticXPath(diagnostic?.xpath);
@@ -279,46 +285,45 @@ function narrowByPath(result, steps, graph, profile) {
   const parent = steps[steps.length - 2];
 
   // Which type does the parent step resolve to? Walk from the root so that an
-  // ambiguous ancestor does not silently pick the wrong branch either.
-  let currentType = null;
+  // ambiguous ancestor does not silently pick the wrong branch either. Each
+  // step's content model is carried to the next, which finds its child in it.
+  /** @type {any} */
+  let current = null;
   for (const [i, step] of steps.slice(0, -1).entries()) {
-    const answer =
-      i === 0 ? graph.children(step, {profile}) : childTypeOf(currentType, step, graph, profile);
-    if (answer === null || answer.found !== true || answer.ambiguous === true) return null;
-    currentType = answer.type;
+    current =
+      i === 0 ? graph.children(step, {profile}) : childModelOf(current, step, graph, profile);
+    if (current === null || current.found !== true || current.ambiguous === true) return null;
   }
-  if (currentType === null) return null;
+  if (current === null) return null;
 
-  const declaringType = currentType;
+  const declaringType = current.type;
   const match = result.variants.find((variant) =>
     (variant.applies_when_declared_in ?? []).includes(declaringType),
   );
   return match === undefined ? null : {...match, narrowed_by: `${parent} is ${declaringType}`};
 }
 
-/** The content model of `childName` as declared inside `parentType`. */
-function childTypeOf(parentType, childName, graph, profile) {
-  if (parentType === null) return null;
-  const parent = graph.children(parentType, {profile});
-  if (parent.found !== true || parent.ambiguous === true) return null;
+/** The content model of `childName` as declared inside the `parent` content model. */
+function childModelOf(parent, childName, graph, profile) {
   const child = parent.order.find((entry) => entry.qname === childName);
   if (child === undefined || child.type === undefined) return null;
   return graph.children(child.type, {profile});
 }
 
 /**
- * The attribute list at a position, narrowed by the ancestor chain where it can
- * be.
+ * A `children` or `attributes` answer at a position, narrowed by the ancestor
+ * chain where it can be.
  *
- * The same trick `narrowByPath` does for content models, and needed for the
- * same reason: `pageSetup` is `CT_PageSetup` on a worksheet and
- * `CT_CsPageSetup` on a chartsheet, with *different attribute sets*, so
- * answering from whichever variant sorted first is a confidently wrong answer
- * about a real spreadsheet. The diagnostic's xpath says `/x:worksheet/…`, which
- * settles it.
+ * Attributes need it as much as content models do: `pageSetup` is
+ * `CT_PageSetup` on a worksheet and `CT_CsPageSetup` on a chartsheet, with
+ * *different attribute sets*, so answering from whichever variant sorted first
+ * is a confidently wrong answer about a real spreadsheet. The diagnostic's
+ * xpath says `/x:worksheet/…`, which settles it.
+ *
+ * @param {'children' | 'attributes'} tool
  */
-function attributesAt(graph, element, profile, steps) {
-  const result = graph.attributes(element, {profile});
+function narrowedAt(graph, tool, element, profile, steps) {
+  const result = graph[tool](element, {profile});
   const narrowed = narrowByPath(result, steps, graph, profile);
   if (narrowed === null) return result;
   return {query: result.query, profile: result.profile, found: true, ...narrowed};
@@ -327,10 +332,10 @@ function attributesAt(graph, element, profile, steps) {
 /** Compose the existing tools rather than querying again — one query layer, not two. */
 function resolveLegal(graph, answer, element, named, profile, steps = []) {
   if (answer === 'attributes') {
-    return {kind: 'attributes', ...attributesAt(graph, element, profile, steps)};
+    return {kind: 'attributes', ...narrowedAt(graph, 'attributes', element, profile, steps)};
   }
   if (answer === 'attribute_values') {
-    const attributes = attributesAt(graph, element, profile, steps);
+    const attributes = narrowedAt(graph, 'attributes', element, profile, steps);
     if (attributes.found === true && named !== null) {
       // Narrow to the attribute the diagnostic actually named, and resolve its
       // type's value space — the bounds and pattern are the answer, not the
@@ -372,16 +377,5 @@ function resolveLegal(graph, answer, element, named, profile, steps = []) {
     return {kind: 'attributes', ...attributes};
   }
 
-  const result = graph.children(element, {profile});
-  const narrowed = narrowByPath(result, steps, graph, profile);
-  if (narrowed !== null) {
-    return {
-      kind: 'children',
-      query: result.query,
-      profile: result.profile,
-      found: true,
-      ...narrowed,
-    };
-  }
-  return {kind: 'children', ...result};
+  return {kind: 'children', ...narrowedAt(graph, 'children', element, profile, steps)};
 }

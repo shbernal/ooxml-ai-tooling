@@ -16,7 +16,7 @@ import {DEFAULT_DB_PATH, openGraph} from './db.mjs';
 import {candidateVocabularies, formatQName, loadVocabularyIndex, parseQName} from './qname.mjs';
 
 export const PROFILE_KEYS = ['transitional', 'strict'];
-const DEFAULT_PROFILE = 'transitional';
+export const DEFAULT_PROFILE = 'transitional';
 
 /** Content models nest; groups reference groups. Bounded, and truncation is always reported. */
 const MAX_DEPTH = 12;
