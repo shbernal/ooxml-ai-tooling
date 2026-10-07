@@ -205,10 +205,10 @@ export const TYPE = oneOf('ooxml_type: what each matching type derives from, and
       z.strictObject({
         ...SYMBOL,
         derivation: z
-          .object({
+          .strictObject({
             relation: z.enum(['extension', 'restriction']),
             content_model: z.enum(['simpleType', 'simpleContent', 'complexContent']),
-            base: z.strictObject({qname: NULLABLE_STRING, builtin: z.boolean()}),
+            base: TYPE_REF,
           })
           .nullable(),
         content: z

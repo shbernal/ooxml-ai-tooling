@@ -40,6 +40,13 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
 
   // ---------------------------------------------------------------- lookup --
 
+  const SYMBOL_SELECT = `SELECT s.id, s.local_name, s.kind, s.parent_symbol_id, s.type_ref,
+                                s.type_symbol_id, s.is_anonymous, v.key AS vocabulary
+                           FROM symbols s JOIN vocabularies v ON v.id = s.vocabulary_id`;
+
+  /** `?, ?, ?` for an `IN (…)` over `list`. */
+  const placeholders = (list) => list.map(() => '?').join(', ');
+
   /**
    * Symbols matching a qname.
    *
@@ -63,12 +70,12 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     const clauses = [];
     const params = [];
     if (vocabularies !== null) {
-      clauses.push(`v.key IN (${vocabularies.map(() => '?').join(', ')})`);
+      clauses.push(`v.key IN (${placeholders(vocabularies)})`);
       params.push(...vocabularies);
     }
     if (kind !== null) {
-      const kinds = Array.isArray(kind) ? kind : [kind];
-      clauses.push(`s.kind IN (${kinds.map(() => '?').join(', ')})`);
+      const kinds = [kind].flat();
+      clauses.push(`s.kind IN (${placeholders(kinds)})`);
       params.push(...kinds);
     }
     if (!includeAnonymous) clauses.push('s.is_anonymous = 0');
@@ -79,9 +86,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     // nothing matches exactly, so `tblpr` still finds `w:tblPr`.
     const select = (nameClause) =>
       handle.all(
-        `SELECT s.id, s.local_name, s.kind, s.parent_symbol_id, s.type_ref, s.type_symbol_id,
-                s.is_anonymous, v.key AS vocabulary
-           FROM symbols s JOIN vocabularies v ON v.id = s.vocabulary_id
+        `${SYMBOL_SELECT}
           WHERE ${[nameClause, ...clauses].join(' AND ')}
           ORDER BY s.parent_symbol_id, v.key, s.kind, s.id`,
         parsed.localName,
@@ -92,13 +97,43 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     return {parsed, vocabularies, rows};
   }
 
-  const symbolById = (id) =>
+  const symbolById = (id) => handle.get(`${SYMBOL_SELECT} WHERE s.id = ?`, id);
+
+  /** The derivation edge of a type in a profile, or undefined. At most one exists. */
+  const baseOf = (symbolId, pid) =>
     handle.get(
-      `SELECT s.id, s.local_name, s.kind, s.parent_symbol_id, s.type_ref, s.type_symbol_id,
-              s.is_anonymous, v.key AS vocabulary
-         FROM symbols s JOIN vocabularies v ON v.id = s.vocabulary_id WHERE s.id = ?`,
-      id,
+      `SELECT relation, content_model, base_type_ref, base_symbol_id FROM inheritance_edges
+        WHERE symbol_id = ? AND profile_id = ?`,
+      symbolId,
+      pid,
     );
+
+  const enumValuesOf = (symbolId, pid) =>
+    handle
+      .all(
+        'SELECT value FROM enums WHERE symbol_id = ? AND profile_id = ? ORDER BY order_index',
+        symbolId,
+        pid,
+      )
+      .map((row) => row.value);
+
+  const childEdgeCount = (symbolId, pid) =>
+    handle.get(
+      'SELECT COUNT(*) AS n FROM child_edges WHERE parent_symbol_id = ? AND profile_id = ?',
+      symbolId,
+      pid,
+    ).n;
+
+  const attributeCount = (symbolId, pid) =>
+    handle.get(
+      'SELECT COUNT(*) AS n FROM attr_edges WHERE symbol_id = ? AND profile_id = ?',
+      symbolId,
+      pid,
+    ).n;
+
+  /** The type or group a local declaration sits in, or null for a global one. */
+  const declaredInName = (row) =>
+    row.parent_symbol_id === 0 ? null : display(symbolById(row.parent_symbol_id));
 
   const symbolProfiles = (id) =>
     handle
@@ -153,7 +188,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
   }
 
   function describeSymbol(row, profile) {
-    const owner = row.parent_symbol_id === 0 ? null : symbolById(row.parent_symbol_id);
+    const owner = declaredInName(row);
     const namespace = namespaceOf(row.vocabulary, profile);
     return {
       id: row.id,
@@ -163,7 +198,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       vocabulary: row.vocabulary,
       namespace: namespace === null ? null : {uri: namespace.uri, prefix: namespace.prefix},
       profiles: symbolProfiles(row.id),
-      scope: owner === null ? 'global' : {declared_in: display(owner)},
+      scope: owner === null ? 'global' : {declared_in: owner},
       type: describeType(row.type_ref, row.type_symbol_id),
       ...externalNote(row.vocabulary),
     };
@@ -313,6 +348,31 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
         `${resolved.names.join(', ')}. Qualify the name to pick one.`
       : `${qname} has ${resolved.variants.length} different ${noun} depending on where it appears.`;
 
+  /**
+   * One variant answers flat; several answer `ambiguous` with every variant.
+   * The common case stays flat, and only a genuinely ambiguous name pays for
+   * the extra nesting, visibly.
+   */
+  const variantAnswer = (qname, profile, variants, describe, message) =>
+    variants.length === 1
+      ? {query: qname, profile, found: true, ...describe(variants[0])}
+      : {
+          query: qname,
+          profile,
+          found: true,
+          ambiguous: true,
+          message,
+          variants: variants.map(describe),
+        };
+
+  /** Which type a `resolveToType` variant is and where it applies. Mirrors `PLACEMENT`. */
+  const placement = ({symbol, via, declaredIn}, truncated) => ({
+    type: display(symbol),
+    ...(via === null ? {} : {resolved_from: via}),
+    ...(declaredIn.length === 0 ? {} : {applies_when_declared_in: declaredIn}),
+    truncated,
+  });
+
   // ----------------------------------------------------------------- tools --
 
   /** Canonical record for a name. */
@@ -352,22 +412,13 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       found: true,
       count: matches.length,
       types: matches.map((row) => {
-        const base = handle.get(
-          `SELECT relation, content_model, base_type_ref, base_symbol_id
-             FROM inheritance_edges WHERE symbol_id = ? AND profile_id = ?`,
-          row.id,
-          pid,
-        );
+        const base = baseOf(row.id, pid);
         const summary =
           row.kind === 'simpleType'
             ? {value_space: describeValueSpace(row.id, pid, 0)}
             : {
                 content: contentSummary(row.id, pid),
-                attribute_count: handle.get(
-                  'SELECT COUNT(*) AS n FROM attr_edges WHERE symbol_id = ? AND profile_id = ?',
-                  row.id,
-                  pid,
-                ).n,
+                attribute_count: attributeCount(row.id, pid),
               };
         return {
           ...describeSymbol(row, profile),
@@ -377,10 +428,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
               : {
                   relation: base.relation,
                   content_model: base.content_model,
-                  base:
-                    base.base_symbol_id === null
-                      ? {qname: displayRef(base.base_type_ref), builtin: true}
-                      : {qname: display(symbolById(base.base_symbol_id)), builtin: false},
+                  base: describeType(base.base_type_ref, base.base_symbol_id),
                 },
           ...summary,
         };
@@ -395,11 +443,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       symbolId,
       pid,
     );
-    const children = handle.get(
-      'SELECT COUNT(*) AS n FROM child_edges WHERE parent_symbol_id = ? AND profile_id = ?',
-      symbolId,
-      pid,
-    ).n;
+    const children = childEdgeCount(symbolId, pid);
     const groups = handle.get(
       `SELECT COUNT(*) AS n FROM group_edges
         WHERE parent_symbol_id = ? AND profile_id = ? AND ref_kind = 'group'`,
@@ -438,32 +482,19 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     const resolved = resolveToType(qname, profile);
     if (resolved.found === false) return {query: qname, profile, ...resolved};
 
-    const describe = ({symbol, via, declaredIn}) => {
+    const describe = (variant) => {
       const state = {seenGroups: new Set(), truncated: false};
-      const tree = particlesOf(symbol.id, pid, state, 0, expandGroups);
-      return {
-        type: display(symbol),
-        ...(via === null ? {} : {resolved_from: via}),
-        ...(declaredIn.length === 0 ? {} : {applies_when_declared_in: declaredIn}),
-        truncated: state.truncated,
-        tree,
-        order: flatten(tree),
-      };
+      const tree = particlesOf(variant.symbol.id, pid, state, 0, expandGroups);
+      return {...placement(variant, state.truncated), tree, order: flatten(tree)};
     };
 
-    // The common case stays flat; only a genuinely ambiguous name pays for the
-    // extra nesting, and then it pays it visibly.
-    if (resolved.variants.length === 1) {
-      return {query: qname, profile, found: true, ...describe(resolved.variants[0])};
-    }
-    return {
-      query: qname,
+    return variantAnswer(
+      qname,
       profile,
-      found: true,
-      ambiguous: true,
-      message: ambiguityMessage(qname, resolved, 'content models'),
-      variants: resolved.variants.map(describe),
-    };
+      resolved.variants,
+      describe,
+      ambiguityMessage(qname, resolved, 'content models'),
+    );
   }
 
   /**
@@ -534,9 +565,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       variants: [...byType.entries()].map(([typeSymbolId, sites]) => ({
         symbol: symbolById(typeSymbolId),
         via: `${display(sites[0])} -> ${displayRef(sites[0].type_ref)}`,
-        declaredIn: sites.map((r) =>
-          r.parent_symbol_id === 0 ? 'global' : display(symbolById(r.parent_symbol_id)),
-        ),
+        declaredIn: sites.map((r) => declaredInName(r) ?? 'global'),
       })),
     };
   }
@@ -557,12 +586,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     }
     const nodes = [];
 
-    const base = handle.get(
-      `SELECT relation, content_model, base_symbol_id FROM inheritance_edges
-        WHERE symbol_id = ? AND profile_id = ?`,
-      symbolId,
-      pid,
-    );
+    const base = baseOf(symbolId, pid);
     // Extension prepends the base particle; restriction replaces it. Getting
     // this backwards reorders the legal children of every derived type.
     if (base !== undefined && base.relation === 'extension' && base.base_symbol_id !== null) {
@@ -570,57 +594,59 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       nodes.push(...particlesOf(base.base_symbol_id, pid, state, depth + 1, expandGroups, from));
     }
 
-    for (const node of topLevelParticles(
-      symbolId,
-      pid,
-      state,
-      depth,
-      expandGroups,
-      contributedBy,
-    )) {
-      nodes.push(node);
-    }
+    nodes.push(...topLevelParticles(symbolId, pid, state, depth, expandGroups, contributedBy));
     return nodes;
+  }
+
+  /**
+   * The particles directly under a type or group definition, or inside one
+   * compositor, merged into document order. Only a compositor holds element
+   * edges; a definition's top level is compositors and group refs.
+   *
+   * @param {{parentSymbolId: number} | {compositorId: number}} parent
+   */
+  function particleRows(parent, pid) {
+    const inCompositor = 'compositorId' in parent;
+    const id = inCompositor ? parent.compositorId : parent.parentSymbolId;
+    const tag = (kind) => (row) => ({...row, _kind: kind});
+    const elements = inCompositor
+      ? handle
+          .all(
+            `SELECT child_symbol_id, min_occurs, max_occurs, order_index,
+                    is_wildcard, wildcard_namespace, wildcard_process_contents
+               FROM child_edges WHERE compositor_id = ? AND profile_id = ? ORDER BY order_index`,
+            id,
+            pid,
+          )
+          .map(tag('child'))
+      : [];
+    const compositors = handle
+      .all(
+        `SELECT id, kind, min_occurs, max_occurs, order_index FROM compositors
+          WHERE ${inCompositor ? 'parent_compositor_id' : 'parent_symbol_id'} = ? AND profile_id = ?
+          ORDER BY order_index`,
+        id,
+        pid,
+      )
+      .map(tag('compositor'));
+    const groups = handle
+      .all(
+        `SELECT id, group_symbol_id, min_occurs, max_occurs, order_index FROM group_edges
+          WHERE ${inCompositor ? 'compositor_id = ?' : 'parent_symbol_id = ? AND compositor_id IS NULL'}
+            AND profile_id = ? AND ref_kind = 'group'
+          ORDER BY order_index`,
+        id,
+        pid,
+      )
+      .map(tag('group'));
+    return [...elements, ...compositors, ...groups].sort((a, b) => a.order_index - b.order_index);
   }
 
   /** Compositors and group refs hanging directly off a definition, in document order. */
   function topLevelParticles(symbolId, pid, state, depth, expandGroups, contributedBy) {
-    const compositors = handle
-      .all(
-        `SELECT id, kind, min_occurs, max_occurs, order_index FROM compositors
-          WHERE parent_symbol_id = ? AND profile_id = ? ORDER BY order_index`,
-        symbolId,
-        pid,
-      )
-      .map((c) => ({...c, _sort: c.order_index, _kind: 'compositor'}));
-
-    const groups = handle
-      .all(
-        `SELECT id, group_symbol_id, min_occurs, max_occurs, order_index FROM group_edges
-          WHERE parent_symbol_id = ? AND profile_id = ? AND ref_kind = 'group' AND compositor_id IS NULL
-          ORDER BY order_index`,
-        symbolId,
-        pid,
-      )
-      .map((g) => ({...g, _sort: g.order_index, _kind: 'group'}));
-
-    return [...compositors, ...groups]
-      .sort((a, b) => a._sort - b._sort)
-      .map((entry) =>
-        entry._kind === 'compositor'
-          ? compositorNode(entry, pid, state, depth, expandGroups, contributedBy)
-          : groupNode(entry, pid, state, depth, expandGroups, contributedBy),
-      );
-  }
-
-  function compositorNode(compositor, pid, state, depth, expandGroups, contributedBy) {
-    return {
-      kind: compositor.kind,
-      min: compositor.min_occurs,
-      max: compositor.max_occurs,
-      ...(contributedBy === null ? {} : {from: contributedBy}),
-      children: compositorChildren(compositor.id, pid, state, depth, expandGroups, contributedBy),
-    };
+    return particleRows({parentSymbolId: symbolId}, pid).map((entry) =>
+      particleNode(entry, pid, state, depth, expandGroups, contributedBy),
+    );
   }
 
   /** Elements, wildcards, nested compositors and group refs inside one compositor. */
@@ -629,64 +655,45 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       state.truncated = true;
       return [];
     }
+    return particleRows({compositorId}, pid).map((entry) =>
+      particleNode(entry, pid, state, depth + 1, expandGroups, contributedBy),
+    );
+  }
 
-    const elements = handle
-      .all(
-        `SELECT child_symbol_id, min_occurs, max_occurs, order_index,
-                is_wildcard, wildcard_namespace, wildcard_process_contents
-           FROM child_edges WHERE compositor_id = ? AND profile_id = ? ORDER BY order_index`,
-        compositorId,
-        pid,
-      )
-      .map((e) => ({...e, _sort: e.order_index, _kind: 'child'}));
+  const fromField = (contributedBy) => (contributedBy === null ? {} : {from: contributedBy});
 
-    const nested = handle
-      .all(
-        `SELECT id, kind, min_occurs, max_occurs, order_index FROM compositors
-          WHERE parent_compositor_id = ? AND profile_id = ? ORDER BY order_index`,
-        compositorId,
-        pid,
-      )
-      .map((c) => ({...c, _sort: c.order_index, _kind: 'compositor'}));
-
-    const groups = handle
-      .all(
-        `SELECT id, group_symbol_id, min_occurs, max_occurs, order_index FROM group_edges
-          WHERE compositor_id = ? AND profile_id = ? AND ref_kind = 'group' ORDER BY order_index`,
-        compositorId,
-        pid,
-      )
-      .map((g) => ({...g, _sort: g.order_index, _kind: 'group'}));
-
-    return [...elements, ...nested, ...groups]
-      .sort((a, b) => a._sort - b._sort)
-      .map((entry) => {
-        if (entry._kind === 'compositor') {
-          return compositorNode(entry, pid, state, depth + 1, expandGroups, contributedBy);
-        }
-        if (entry._kind === 'group') {
-          return groupNode(entry, pid, state, depth + 1, expandGroups, contributedBy);
-        }
-        if (entry.is_wildcard === 1) {
-          return {
-            kind: 'any',
-            namespace: entry.wildcard_namespace,
-            process_contents: entry.wildcard_process_contents,
-            min: entry.min_occurs,
-            max: entry.max_occurs,
-            ...(contributedBy === null ? {} : {from: contributedBy}),
-          };
-        }
-        const child = symbolById(entry.child_symbol_id);
-        return {
-          kind: 'element',
-          qname: display(child),
-          type: displayRef(child.type_ref),
-          min: entry.min_occurs,
-          max: entry.max_occurs,
-          ...(contributedBy === null ? {} : {from: contributedBy}),
-        };
-      });
+  function particleNode(entry, pid, state, depth, expandGroups, contributedBy) {
+    if (entry._kind === 'compositor') {
+      return {
+        kind: entry.kind,
+        min: entry.min_occurs,
+        max: entry.max_occurs,
+        ...fromField(contributedBy),
+        children: compositorChildren(entry.id, pid, state, depth, expandGroups, contributedBy),
+      };
+    }
+    if (entry._kind === 'group') {
+      return groupNode(entry, pid, state, depth, expandGroups, contributedBy);
+    }
+    if (entry.is_wildcard === 1) {
+      return {
+        kind: 'any',
+        namespace: entry.wildcard_namespace,
+        process_contents: entry.wildcard_process_contents,
+        min: entry.min_occurs,
+        max: entry.max_occurs,
+        ...fromField(contributedBy),
+      };
+    }
+    const child = symbolById(entry.child_symbol_id);
+    return {
+      kind: 'element',
+      qname: display(child),
+      type: displayRef(child.type_ref),
+      min: entry.min_occurs,
+      max: entry.max_occurs,
+      ...fromField(contributedBy),
+    };
   }
 
   /**
@@ -712,7 +719,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       qname: display(group),
       min: edge.min_occurs,
       max: edge.max_occurs,
-      ...(contributedBy === null ? {} : {from: contributedBy}),
+      ...fromField(contributedBy),
     };
     if (!expandGroups) return node;
     if (state.seenGroups.has(group.id)) return {...node, recursive: true};
@@ -729,6 +736,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
 
   /** Every element the tree permits, in order, flattened for the common case. */
   function flatten(nodes, path = [], out = []) {
+    const where = path.join(' > ') || 'top';
     for (const node of nodes) {
       if (node.kind === 'element') {
         out.push({
@@ -736,14 +744,14 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
           type: node.type,
           min: node.min,
           max: node.max,
-          in: path.join(' > ') || 'top',
+          in: where,
           ...(node.from === undefined ? {} : {from: node.from}),
         });
       } else if (node.kind === 'any') {
         out.push({
           wildcard: node.namespace,
           process_contents: node.process_contents,
-          in: path.join(' > ') || 'top',
+          in: where,
         });
       } else if (node.children !== undefined) {
         const label = node.kind === 'group' ? `group ${node.qname}` : node.kind;
@@ -786,12 +794,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
           return;
         }
 
-        const base = handle.get(
-          `SELECT relation, base_symbol_id FROM inheritance_edges
-          WHERE symbol_id = ? AND profile_id = ?`,
-          symbolId,
-          pid,
-        );
+        const base = baseOf(symbolId, pid);
         // Both extension and restriction inherit attributes — unlike particles,
         // where restriction replaces. A restriction may narrow an attribute's
         // use, and the derived declaration wins, which is why the base is
@@ -864,29 +867,18 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       };
     };
 
-    const describe = ({symbol, via, declaredIn}) => {
-      const {list, truncated} = collectFor(symbol.id);
-      return {
-        type: display(symbol),
-        ...(via === null ? {} : {resolved_from: via}),
-        ...(declaredIn.length === 0 ? {} : {applies_when_declared_in: declaredIn}),
-        truncated,
-        count: list.length,
-        attributes: list,
-      };
+    const describe = (variant) => {
+      const {list, truncated} = collectFor(variant.symbol.id);
+      return {...placement(variant, truncated), count: list.length, attributes: list};
     };
 
-    if (resolved.variants.length === 1) {
-      return {query: qname, profile, found: true, ...describe(resolved.variants[0])};
-    }
-    return {
-      query: qname,
+    return variantAnswer(
+      qname,
       profile,
-      found: true,
-      ambiguous: true,
-      message: ambiguityMessage(qname, resolved, 'types'),
-      variants: resolved.variants.map(describe),
-    };
+      resolved.variants,
+      describe,
+      ambiguityMessage(qname, resolved, 'types'),
+    );
   }
 
   // --------------------------------------------------------------- values ---
@@ -949,11 +941,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
         };
       }
       const name = targetName(target);
-      const values = handle.all(
-        'SELECT value FROM enums WHERE symbol_id = ? AND profile_id = ? ORDER BY order_index',
-        target.symbolId,
-        pid,
-      );
+      const values = enumValuesOf(target.symbolId, pid);
       // Not an error — most simple types are bounded by facets or unions rather
       // than enumerated, and `values` is the tool that answers those.
       if (values.length === 0) {
@@ -968,21 +956,17 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
         type: name,
         enumerated: true,
         count: values.length,
-        values: values.map((v) => v.value),
+        values,
       };
     };
 
-    if (resolved.targets.length === 1) {
-      return {query: qname, profile, found: true, ...describe(resolved.targets[0])};
-    }
-    return {
-      query: qname,
+    return variantAnswer(
+      qname,
       profile,
-      found: true,
-      ambiguous: true,
-      message: simpleTypeAmbiguityMessage(qname, resolved.targets),
-      variants: resolved.targets.map(describe),
-    };
+      resolved.targets,
+      describe,
+      simpleTypeAmbiguityMessage(qname, resolved.targets),
+    );
   }
 
   /**
@@ -1023,33 +1007,21 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
       return {type: targetName(target), ...describeValueSpace(target.symbolId, pid, 0)};
     };
 
-    if (resolved.targets.length === 1) {
-      return {query: qname, profile, found: true, ...describe(resolved.targets[0])};
-    }
-    return {
-      query: qname,
+    return variantAnswer(
+      qname,
       profile,
-      found: true,
-      ambiguous: true,
-      message: simpleTypeAmbiguityMessage(qname, resolved.targets),
-      variants: resolved.targets.map(describe),
-    };
+      resolved.targets,
+      describe,
+      simpleTypeAmbiguityMessage(qname, resolved.targets),
+    );
   }
 
   function describeValueSpace(symbolId, pid, depth) {
     if (depth > MAX_DEPTH) return {truncated: true};
 
-    const base = handle.get(
-      `SELECT base_type_ref, base_symbol_id FROM inheritance_edges
-        WHERE symbol_id = ? AND profile_id = ? AND content_model = 'simpleType'`,
-      symbolId,
-      pid,
-    );
-    const enumerated = handle.all(
-      'SELECT value FROM enums WHERE symbol_id = ? AND profile_id = ? ORDER BY order_index',
-      symbolId,
-      pid,
-    );
+    const inherited = baseOf(symbolId, pid);
+    const base = inherited?.content_model === 'simpleType' ? inherited : undefined;
+    const enumerated = enumValuesOf(symbolId, pid);
     const facets = handle.all(
       'SELECT facet, value FROM simple_type_facets WHERE symbol_id = ? AND profile_id = ? ORDER BY order_index',
       symbolId,
@@ -1064,7 +1036,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
 
     const space = {};
     if (base !== undefined) space.base = displayRef(base.base_type_ref);
-    if (enumerated.length > 0) space.enumeration = enumerated.map((e) => e.value);
+    if (enumerated.length > 0) space.enumeration = enumerated;
     if (facets.length > 0) {
       space.facets = Object.fromEntries(facets.map((f) => [f.facet, f.value]));
     }
@@ -1162,8 +1134,8 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
     const params = [pid, `%${pattern}%`];
     let kindClause = '';
     if (kind !== null) {
-      const kinds = Array.isArray(kind) ? kind : [kind];
-      kindClause = ` AND s.kind IN (${kinds.map(() => '?').join(', ')})`;
+      const kinds = [kind].flat();
+      kindClause = ` AND s.kind IN (${placeholders(kinds)})`;
       params.push(...kinds);
     }
 
@@ -1195,9 +1167,7 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
               qname: display(row),
               kind: row.kind,
               vocabulary: row.vocabulary,
-              ...(row.parent_symbol_id === 0
-                ? {}
-                : {declared_in: display(symbolById(row.parent_symbol_id))}),
+              ...(row.parent_symbol_id === 0 ? {} : {declared_in: declaredInName(row)}),
               ...(row.type_ref === null ? {} : {type: displayRef(row.type_ref)}),
             })),
           }),
@@ -1232,23 +1202,9 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
           const pid = profileId(key);
           perProfile[key] = {
             namespace: namespaceOf(row.vocabulary, key)?.uri ?? null,
-            children: handle.get(
-              'SELECT COUNT(*) AS n FROM child_edges WHERE parent_symbol_id = ? AND profile_id = ?',
-              row.id,
-              pid,
-            ).n,
-            attributes: handle.get(
-              'SELECT COUNT(*) AS n FROM attr_edges WHERE symbol_id = ? AND profile_id = ?',
-              row.id,
-              pid,
-            ).n,
-            enumeration: handle
-              .all(
-                'SELECT value FROM enums WHERE symbol_id = ? AND profile_id = ? ORDER BY order_index',
-                row.id,
-                pid,
-              )
-              .map((e) => e.value),
+            children: childEdgeCount(row.id, pid),
+            attributes: attributeCount(row.id, pid),
+            enumeration: enumValuesOf(row.id, pid),
             union_members: handle
               .all(
                 `SELECT member_type_ref FROM union_members

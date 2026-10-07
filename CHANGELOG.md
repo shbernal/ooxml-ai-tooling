@@ -28,6 +28,8 @@ runtime notices.
   document writes (`w:left`, `r:id`), and attributes are told apart by it.
   `explain` matches a diagnostic's attribute name against that `qname` first,
   so `'r:id'` resolves to the relationship id's value space.
+- `type`'s `derivation.base` reads like every other type reference: a base
+  that is not built in now carries its `kind` and `id`.
 
 ### npm only
 
