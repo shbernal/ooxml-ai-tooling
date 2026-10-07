@@ -8,7 +8,19 @@ This file ships in neither artifact. It is where a breaking change is announced,
 because nothing else announces one — there are no deprecation shims and no
 runtime notices.
 
-## Unreleased — npm only
+## Unreleased
+
+### Both surfaces
+
+- **`not_in_profile` no longer fires for names in both profiles.** `type`,
+  `enum` and `values` take only some kinds of symbol, and a miss on kind alone
+  was reported as a profile miss: `type('w:p')` said `w:p` is Strict-only. Such
+  a miss is now `reason: 'wrong_kind'`, with the kinds the name is in a `kinds`
+  array and a message naming the call that answers it, for example
+  `type('w:CT_P')` or `children('w:p')`. `not_in_profile` now means the name
+  exists as a kind the tool takes, but only in the other profile.
+
+### npm only
 
 - The server runs on the v2 MCP TypeScript SDK (`@modelcontextprotocol/server`),
   replacing `@modelcontextprotocol/sdk` 1.x. The tools, their schemas and the

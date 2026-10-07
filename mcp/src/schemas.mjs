@@ -94,6 +94,13 @@ const notFound = (/** @type {string[]} */ extra = []) =>
 
 const NOT_FOUND = notFound();
 const NO_CONTENT_MODEL = notFound(['no_content_model']);
+/** For the tools that take only some kinds of symbol, and so can miss on kind alone. */
+const KIND_MISS = notFound(['wrong_kind']).extend({
+  kinds: z
+    .array(SYMBOL_KIND)
+    .optional()
+    .describe('With reason wrong_kind: what the name is instead, in this profile if it is there.'),
+});
 
 /** A type reference, resolved. A built-in stays named and carries no symbol. */
 const TYPE_REF = shared(
@@ -220,7 +227,7 @@ export const TYPE = oneOf('ooxml_type: what each matching type derives from, and
       }),
     ),
   }),
-  NOT_FOUND,
+  KIND_MISS,
 ]);
 
 const FROM = z.string().optional().describe('The base type or group that contributed this.');
@@ -348,7 +355,7 @@ const ENUMERATION = {
 export const ENUM = oneOf('ooxml_enum: the enumerated values, in schema order.', [
   z.strictObject({query: QUERY, profile: PROFILE, found: TRUE, ...ENUMERATION}),
   ambiguous(z.strictObject(ENUMERATION)),
-  NOT_FOUND,
+  KIND_MISS,
 ]);
 
 const VALUE_ANSWER = {
@@ -365,7 +372,7 @@ const VALUES_AMBIGUOUS = ambiguous(z.strictObject(VALUE_ANSWER));
 export const VALUES = oneOf('ooxml_values: the legal value space of a simple type.', [
   VALUES_FOUND,
   VALUES_AMBIGUOUS,
-  NOT_FOUND,
+  KIND_MISS,
 ]);
 
 export const NAMESPACE = oneOf('ooxml_namespace: matching namespaces, in every profile.', [

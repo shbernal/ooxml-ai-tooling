@@ -91,6 +91,42 @@ describe('absent is not prohibited', () => {
     assert.match(result.message, /Known prefixes:/);
     assert.match(result.message, /\bw\b/);
   });
+
+  test('a name of the wrong kind says what it is, not that it is in another profile', () => {
+    // Both names exist in both profiles. A kind-filtered tool that misses on
+    // them must not send the caller off to switch profile.
+    const typeOfElement = graph.type('w:p');
+    assert.equal(typeOfElement.reason, 'wrong_kind');
+    assert.deepEqual(typeOfElement.kinds, ['element']);
+    assert.match(typeOfElement.message, /type\('w:CT_P'\)/);
+
+    for (const tool of ['values', 'enum']) {
+      const result = graph[tool]('w:CT_Tbl');
+      assert.equal(result.reason, 'wrong_kind', tool);
+      assert.deepEqual(result.kinds, ['complexType'], tool);
+    }
+  });
+
+  test('a kind-filtered miss in the other profile is still a profile miss', () => {
+    const result = graph.type('v:CT_Shape', {profile: 'strict'});
+    assert.equal(result.reason, 'not_in_profile');
+    assert.deepEqual(result.profiles, ['transitional']);
+    assert.equal(graph.values('v:shape', {profile: 'strict'}).reason, 'not_in_profile');
+  });
+
+  test('no tool calls a name in both profiles absent from either', () => {
+    const names = ['w:p', 'w:tbl', 'w:tblPr', 'w:CT_Tbl', 'w:ST_Jc', 'w:EG_PContent', 'a:p'];
+    const tools = ['element', 'type', 'children', 'attributes', 'enum', 'values'];
+    for (const name of names) {
+      for (const profile of ['transitional', 'strict']) {
+        assert.equal(graph.element(name, {profile}).found, true, `${name} in ${profile}`);
+        for (const tool of tools) {
+          const result = graph[tool](name, {profile});
+          assert.notEqual(result.reason, 'not_in_profile', `${tool}('${name}') in ${profile}`);
+        }
+      }
+    }
+  });
 });
 
 describe('children', () => {

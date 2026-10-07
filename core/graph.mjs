@@ -172,11 +172,22 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
   /**
    * The envelope every tool returns for a name it could not resolve.
    *
-   * Rule 3 lives here: three different "no" answers, because the next action
+   * Rule 3 lives here: different "no" answers, because the next action
    * differs. Nothing found at all is a typo; found but not in this profile is a
-   * profile switch; a named vocabulary that does not exist is a bad prefix.
+   * profile switch; found, but not as a kind this tool takes, is a different
+   * tool; a named vocabulary that does not exist is a bad prefix.
+   *
+   * `found` is the caller's own lookup, filtered by the caller's `kind`, with
+   * no row in `profile`. Judging the profile from those rows rather than an
+   * unfiltered lookup is the point: `w:p` is in both profiles, so the
+   * type-only miss of `type('w:p')` must not read as a profile miss.
+   *
+   * @param {string} qname
+   * @param {{parsed: any, vocabularies: string[] | null, rows: any[]}} found
+   * @param {string} profile
+   * @param {{kind?: string[] | null, expected?: string}} [options]
    */
-  function notFound(qname, parsed, vocabularies, profile) {
+  function notFound(qname, {parsed, vocabularies, rows}, profile, {kind = null, expected} = {}) {
     if (vocabularies !== null && vocabularies.length === 0) {
       return {
         found: false,
@@ -186,14 +197,10 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
           `Known prefixes: ${knownPrefixes().join(', ')}.`,
       };
     }
-    // Was it found in the *other* profile? That is a different answer.
-    const elsewhere = lookup(qname).rows.filter((row) =>
-      symbolProfiles(row.id).some((key) => key !== profile),
+    const others = [...new Set(rows.flatMap((row) => symbolProfiles(row.id)))].filter(
+      (key) => key !== profile,
     );
-    if (elsewhere.length > 0) {
-      const others = [...new Set(elsewhere.flatMap((row) => symbolProfiles(row.id)))].filter(
-        (key) => key !== profile,
-      );
+    if (others.length > 0) {
       return {
         found: false,
         reason: 'not_in_profile',
@@ -201,10 +208,71 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
         profiles: others,
       };
     }
+    if (kind !== null) {
+      const any = lookup(qname).rows;
+      if (any.length > 0) return wrongKind(qname, inProfile(any, profile), any, expected);
+    }
     return {
       found: false,
       reason: 'unknown_symbol',
       message: `no symbol named "${parsed.localName}" — this is a name lookup, not a search. Try search("${parsed.localName}").`,
+    };
+  }
+
+  const KIND_NOUNS = {
+    element: 'an element',
+    attribute: 'an attribute',
+    complexType: 'a complex type',
+    simpleType: 'a simple type',
+    group: 'a model group',
+    attributeGroup: 'an attribute group',
+  };
+
+  /**
+   * The miss for a name that exists, but not as a kind the tool takes.
+   *
+   * Neither a typo nor a profile switch helps here, so the message names what
+   * the symbol is and the call that does answer it. `rows` are the matches in
+   * the requested profile when there are any, so the advice is about the
+   * symbol the caller can actually use.
+   */
+  function wrongKind(qname, inRequested, all, expected) {
+    const rows = inRequested.length > 0 ? inRequested : all;
+    const kinds = [...new Set(rows.map((row) => row.kind))];
+    const typeNames = [
+      ...new Set(
+        rows
+          .filter((row) => row.type_symbol_id !== null)
+          .map((row) => display(symbolById(row.type_symbol_id))),
+      ),
+    ];
+    const calls = new Set();
+    for (const k of kinds) {
+      if (k === 'element') {
+        for (const name of typeNames) calls.add(`type('${name}')`);
+        calls.add(`children('${qname}')`);
+      } else if (k === 'complexType') {
+        calls.add(`type('${qname}')`);
+        calls.add(`children('${qname}')`);
+      } else if (k === 'group') {
+        calls.add(`children('${qname}')`);
+      } else if (k === 'attribute' || k === 'simpleType') {
+        calls.add(`values('${qname}')`);
+      } else {
+        calls.add(`element('${qname}')`);
+      }
+    }
+    const typed =
+      typeNames.length === 0
+        ? ''
+        : ` Its type ${typeNames.length === 1 ? 'is' : 'is one of'} ${typeNames.join(', ')}.`;
+    return {
+      found: false,
+      reason: 'wrong_kind',
+      message:
+        `"${qname}" is ${kinds.map((k) => KIND_NOUNS[k] ?? k).join(' and ')}, not ${expected}.` +
+        `${typed} Use ${[...calls].join(' or ')}.`,
+      kinds,
     };
   }
 
@@ -250,10 +318,9 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
   /** Canonical record for a name. */
   function element(qname, {profile = DEFAULT_PROFILE} = {}) {
     profileId(profile);
-    const {parsed, vocabularies, rows} = lookup(qname);
-    const matches = inProfile(rows, profile);
-    if (matches.length === 0)
-      return {query: qname, profile, ...notFound(qname, parsed, vocabularies, profile)};
+    const found = lookup(qname);
+    const matches = inProfile(found.rows, profile);
+    if (matches.length === 0) return {query: qname, profile, ...notFound(qname, found, profile)};
     return {
       query: qname,
       profile,
@@ -268,10 +335,16 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
   /** A complexType or simpleType: what it derives from and what shape it has. */
   function type(qname, {profile = DEFAULT_PROFILE} = {}) {
     const pid = profileId(profile);
-    const {parsed, vocabularies, rows} = lookup(qname, {kind: ['complexType', 'simpleType']});
-    const matches = inProfile(rows, profile);
-    if (matches.length === 0)
-      return {query: qname, profile, ...notFound(qname, parsed, vocabularies, profile)};
+    const kind = ['complexType', 'simpleType'];
+    const found = lookup(qname, {kind});
+    const matches = inProfile(found.rows, profile);
+    if (matches.length === 0) {
+      return {
+        query: qname,
+        profile,
+        ...notFound(qname, found, profile, {kind, expected: 'a type'}),
+      };
+    }
 
     return {
       query: qname,
@@ -406,9 +479,9 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
    * and labelled with where it applies, and the caller decides.
    */
   function resolveToType(qname, profile) {
-    const {parsed, vocabularies, rows} = lookup(qname);
-    const matches = inProfile(rows, profile);
-    if (matches.length === 0) return notFound(qname, parsed, vocabularies, profile);
+    const found = lookup(qname);
+    const matches = inProfile(found.rows, profile);
+    if (matches.length === 0) return notFound(qname, found, profile);
 
     // A global type name is unique per vocabulary but not across them:
     // `CT_Shape` is declared in six, and they are unrelated types that happen
@@ -809,11 +882,15 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
    * one type stay a single answer rather than becoming false ambiguity.
    */
   function resolveToSimpleType(qname, profile) {
-    const {parsed, vocabularies, rows} = lookup(qname, {
-      kind: ['simpleType', 'attribute', 'element'],
-    });
-    const matches = inProfile(rows, profile);
-    if (matches.length === 0) return notFound(qname, parsed, vocabularies, profile);
+    const kind = ['simpleType', 'attribute', 'element'];
+    const found = lookup(qname, {kind});
+    const matches = inProfile(found.rows, profile);
+    if (matches.length === 0) {
+      return notFound(qname, found, profile, {
+        kind,
+        expected: 'a simple type',
+      });
+    }
 
     const targets = [];
     const seen = new Set();
@@ -1117,9 +1194,10 @@ export function createGraph({path = DEFAULT_DB_PATH, db = null} = {}) {
    * compatibility.
    */
   function diffProfiles(qname) {
-    const {parsed, vocabularies, rows} = lookup(qname);
+    const found = lookup(qname);
+    const {rows} = found;
     if (rows.length === 0) {
-      return {query: qname, ...notFound(qname, parsed, vocabularies, DEFAULT_PROFILE)};
+      return {query: qname, ...notFound(qname, found, DEFAULT_PROFILE)};
     }
 
     return {
