@@ -19,7 +19,7 @@ import {
   EXPECTED_USER_VERSION as USER_VERSION,
 } from '../core/db.mjs';
 import {buildResolver, declareSymbols, parseProfiles, writeEdges, writeSymbols} from './ingest.mjs';
-import {buildNamespaceIndex, listSchemaFiles} from './parse.mjs';
+import {buildNamespaceIndex, listSchemaFiles, readSchemas} from './parse.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -52,12 +52,12 @@ const PROFILES = [
  */
 const FLOORS = {
   symbols: 3000,
-  child_edges: 2000,
-  attr_edges: 3000,
-  enums: 3000,
   compositors: 800,
+  child_edges: 2000,
   group_edges: 250,
+  attr_edges: 3000,
   inheritance_edges: 500,
+  enums: 3000,
   simple_type_facets: 100,
   union_members: 40,
 };
@@ -82,15 +82,15 @@ export function buildDatabase(outputPath, {profiles = PROFILES, quiet = false} =
   db.exec(`PRAGMA application_id = ${APPLICATION_ID}`);
   db.exec(`PRAGMA user_version = ${USER_VERSION}`);
 
-  const dirs = profiles.flatMap((profile) => profile.dirs.map((dir) => join(ROOT, dir)));
-  const namespaceIndex = buildNamespaceIndex(dirs);
   const withFiles = profiles.map((profile) => ({
     ...profile,
     files: profile.dirs.flatMap((dir) => listSchemaFiles(join(ROOT, dir))),
   }));
 
   log(`parsing ${withFiles.map((p) => `${p.files.length} ${p.key}`).join(', ')} schemas`);
-  const parsed = parseProfiles(withFiles, namespaceIndex);
+  const documents = readSchemas(withFiles.flatMap((profile) => profile.files));
+  const namespaceIndex = buildNamespaceIndex(documents);
+  const parsed = parseProfiles(withFiles, documents, namespaceIndex);
 
   const universe = declareSymbols(parsed);
   log(`declared ${universe.ids.size} symbols across ${parsed.length} profile(s)`);
@@ -117,7 +117,7 @@ export function buildDatabase(outputPath, {profiles = PROFILES, quiet = false} =
 
 function assertIntegrity(db, profiles, log) {
   const failures = [];
-  const count = (sql) => db.prepare(sql).get().n;
+  const count = (sql, ...params) => db.prepare(sql).get(...params).n;
 
   // Declared foreign keys are not enforced retroactively, so ask SQLite
   // directly. This is the "no orphan edges" assertion, for every edge table at
@@ -133,30 +133,19 @@ function assertIntegrity(db, profiles, log) {
 
   // Every reference to an OOXML type resolves. Built-ins (`xsd:string`) are
   // named but have no row, and that is the one legitimate NULL.
-  const unresolvedTypes = count(
-    `SELECT COUNT(*) AS n FROM symbols
-      WHERE type_ref IS NOT NULL AND type_ref NOT LIKE 'xsd:%' AND type_symbol_id IS NULL`,
-  );
-  if (unresolvedTypes > 0) failures.push(`${unresolvedTypes} symbols with an unresolved type_ref`);
-
-  const unresolvedAttrs = count(
-    `SELECT COUNT(*) AS n FROM attr_edges
-      WHERE type_ref IS NOT NULL AND type_ref NOT LIKE 'xsd:%' AND type_symbol_id IS NULL`,
-  );
-  if (unresolvedAttrs > 0)
-    failures.push(`${unresolvedAttrs} attributes with an unresolved type_ref`);
-
-  const unresolvedMembers = count(
-    `SELECT COUNT(*) AS n FROM union_members
-      WHERE member_type_ref NOT LIKE 'xsd:%' AND member_symbol_id IS NULL`,
-  );
-  if (unresolvedMembers > 0) failures.push(`${unresolvedMembers} union members unresolved`);
-
-  const unresolvedBases = count(
-    `SELECT COUNT(*) AS n FROM inheritance_edges
-      WHERE base_type_ref NOT LIKE 'xsd:%' AND base_symbol_id IS NULL`,
-  );
-  if (unresolvedBases > 0) failures.push(`${unresolvedBases} inheritance bases unresolved`);
+  // A NULL ref is no reference at all, and `NULL NOT LIKE …` is not true, so
+  // those rows drop out without a separate IS NOT NULL.
+  for (const [table, ref, id, label] of [
+    ['symbols', 'type_ref', 'type_symbol_id', 'symbols with an unresolved type_ref'],
+    ['attr_edges', 'type_ref', 'type_symbol_id', 'attributes with an unresolved type_ref'],
+    ['union_members', 'member_type_ref', 'member_symbol_id', 'union members unresolved'],
+    ['inheritance_edges', 'base_type_ref', 'base_symbol_id', 'inheritance bases unresolved'],
+  ]) {
+    const n = count(
+      `SELECT COUNT(*) AS n FROM ${table} WHERE ${ref} NOT LIKE 'xsd:%' AND ${id} IS NULL`,
+    );
+    if (n > 0) failures.push(`${n} ${label}`);
+  }
 
   // A compositor hangs off a symbol or off another compositor, never both and
   // never neither. The table has a CHECK; this proves the CHECK was actually in
@@ -188,7 +177,8 @@ function assertIntegrity(db, profiles, log) {
   for (const profile of profiles) {
     const n = count(
       `SELECT COUNT(*) AS n FROM symbol_profiles sp
-         JOIN profiles p ON p.id = sp.profile_id WHERE p.key = '${profile.key}'`,
+         JOIN profiles p ON p.id = sp.profile_id WHERE p.key = ?`,
+      profile.key,
     );
     if (n === 0) failures.push(`profile ${profile.key} has no symbols`);
   }
@@ -217,17 +207,7 @@ function assertIntegrity(db, profiles, log) {
     throw new Error(`integrity assertions failed:\n  - ${failures.join('\n  - ')}`);
   }
 
-  const tally = [
-    'symbols',
-    'compositors',
-    'child_edges',
-    'group_edges',
-    'attr_edges',
-    'inheritance_edges',
-    'enums',
-    'simple_type_facets',
-    'union_members',
-  ]
+  const tally = Object.keys(FLOORS)
     .map((t) => `${t}=${count(`SELECT COUNT(*) AS n FROM ${t}`)}`)
     .join(' ');
   log(`integrity ok  ${tally}`);

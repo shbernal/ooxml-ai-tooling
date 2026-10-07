@@ -59,11 +59,11 @@ const REJECTED = new Set(['redefine', 'override', 'include', 'notation', 'anyAtt
  */
 const ABSENT = new Set(['annotation', 'documentation', 'appinfo']);
 
-/** Parse every file of every profile once. */
-export function parseProfiles(profiles, namespaceIndex) {
+/** Every profile's schemas, read from the documents `readSchemas` parsed. */
+export function parseProfiles(profiles, documents, namespaceIndex) {
   return profiles.map((profile) => ({
     ...profile,
-    schemas: profile.files.map((file) => parseSchema(file, namespaceIndex)),
+    schemas: profile.files.map((file) => parseSchema(file, documents.get(file), namespaceIndex)),
   }));
 }
 
@@ -618,7 +618,7 @@ function writeDefinition(stmt, schema, resolver, profileId, definition, ids) {
 
 /** Compositors, element children, wildcards and group refs, in document order. */
 /** @param {number | null} compositorId the enclosing compositor, null at a definition's top level */
-function writeParticles(context, body, compositorId = null, depth = 0) {
+function writeParticles(context, body, compositorId = null) {
   const {stmt, schema, resolver, profileId, ownerId} = context;
   let order = 0;
 
@@ -636,7 +636,7 @@ function writeParticles(context, body, compositorId = null, depth = 0) {
         max,
         order++,
       );
-      writeParticles(context, child, Number(result.lastInsertRowid), depth + 1);
+      writeParticles(context, child, Number(result.lastInsertRowid));
       continue;
     }
 
@@ -793,14 +793,19 @@ function writeSimpleType(context, node, id) {
         const ref = schema.canonical(member);
         stmt.member.run(profileId, id, 'union', ref, resolver.resolveType(ref), order++);
       }
-      for (const [i, member] of elements(child).entries()) {
+      // The names come from pass 1's own enumeration, so the two passes cannot
+      // number the members differently. A simpleType holds one union at most.
+      for (const {name: anonymousName, node: member} of anonymousMembers(
+        schema,
+        node,
+        context.ownerName,
+      )) {
         if (context.nestedAnonymous) {
           // Pass 1 only synthesises one level of anonymous member, so a union
           // inside a union would resolve against the wrong owner. Fail rather
           // than write an edge pointing somewhere plausible and wrong.
           throw new Error(`${schema.path}: anonymous union nested inside an anonymous union`);
         }
-        const anonymousName = `${context.ownerName}#${i + 1}`;
         const anonymousId = context.ids.get(
           key(schema.vocabulary, 'simpleType', anonymousName, context.ownerKey),
         );

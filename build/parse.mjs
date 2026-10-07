@@ -84,22 +84,37 @@ export const isForeign = (qname) =>
  * its own `targetNamespace`, so the mapping is observed, and a future edition
  * that renames a namespace needs no change here.
  */
-export function buildNamespaceIndex(profileDirs) {
+export function buildNamespaceIndex(documents) {
   const byUri = new Map(); // uri -> vocabulary key
   for (const [uri, external] of EXTERNAL_VOCABULARIES) byUri.set(uri, external.key);
-  for (const dir of profileDirs) {
-    for (const file of listSchemaFiles(dir)) {
-      const {targetNamespace, vocabulary} = readSchemaHeader(file);
-      const seen = byUri.get(targetNamespace);
-      if (seen !== undefined && seen !== vocabulary) {
-        throw new Error(
-          `namespace ${targetNamespace} maps to two vocabularies: ${seen} and ${vocabulary}`,
-        );
-      }
-      byUri.set(targetNamespace, vocabulary);
+  for (const [path, root] of documents) {
+    const targetNamespace = root.attributes.targetNamespace;
+    const vocabulary = vocabularyOf(path);
+    const seen = byUri.get(targetNamespace);
+    if (seen !== undefined && seen !== vocabulary) {
+      throw new Error(
+        `namespace ${targetNamespace} maps to two vocabularies: ${seen} and ${vocabulary}`,
+      );
     }
+    byUri.set(targetNamespace, vocabulary);
   }
   return byUri;
+}
+
+/**
+ * Every schema file, parsed once, as path -> root element. A directory listed
+ * by both profiles (`opc/`) is still read once: the parsed tree is never
+ * modified, so both profiles can read the same one.
+ *
+ * @param {string[]} paths
+ * @returns {Map<string, any>}
+ */
+export function readSchemas(paths) {
+  const documents = new Map();
+  for (const path of paths) {
+    if (!documents.has(path)) documents.set(path, parseDocument(path));
+  }
+  return documents;
 }
 
 export function listSchemaFiles(dir) {
@@ -112,14 +127,6 @@ export function listSchemaFiles(dir) {
 /** The vocabulary key is the file stem: `wml.xsd` -> `wml`. */
 function vocabularyOf(path) {
   return basename(path, '.xsd');
-}
-
-function readSchemaHeader(path) {
-  const root = parseDocument(path);
-  return {
-    targetNamespace: root.attributes.targetNamespace,
-    vocabulary: vocabularyOf(path),
-  };
 }
 
 function parseDocument(path) {
@@ -166,8 +173,7 @@ function xsdName(node, prefixes) {
  * profile-independence of `symbols.type_ref` a property of the data instead of
  * a rule everyone has to remember.
  */
-export function parseSchema(path, namespaceIndex) {
-  const root = parseDocument(path);
+export function parseSchema(path, root, namespaceIndex) {
   const vocabulary = vocabularyOf(path);
   const targetNamespace = root.attributes.targetNamespace;
 
