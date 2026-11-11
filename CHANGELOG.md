@@ -8,6 +8,11 @@ This file ships in neither artifact. It is where a breaking change is announced,
 because nothing else announces one — there are no deprecation shims and no
 runtime notices.
 
+## 0.0.7 — npm (`mcp-server-ooxml`)
+
+- Requires `@modelcontextprotocol/server` 2.4 and `zod` 4.6.7 or later. No
+  change to the tools or their answers.
+
 ## 0.0.6 — both surfaces
 
 ### Both surfaces
