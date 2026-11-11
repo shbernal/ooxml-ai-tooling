@@ -8,13 +8,6 @@
 packages:
   - mcp
 
-# pnpm blocks dependency lifecycle scripts by default and fails the install
-# until every one is answered here. lefthook's postinstall links its platform
-# binary, so denying it would leave `pnpm exec lefthook install` failing with no
-# obvious cause. It is the only dependency in this repo allowed to run one.
-allowBuilds:
-  lefthook: true
-
 # Refuse a version published in the last two days, in minutes. Nothing here needs
 # a release the day it ships, and the window this closes is the one between a
 # compromised publish and its takedown. A runner has no user-level pnpm config,

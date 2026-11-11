@@ -185,7 +185,7 @@ copy, the check and the tests all read it.
 
 - **Never edit a vendored copy directly.** Edit the core, then run
   `make sync-core`.
-- `make check-vendor` fails on drift and runs as a `pre-commit` hook.
+- `make check-vendor` fails on drift and runs in CI.
 - Files not in `CORE_FILES`, meaning the tests and everything in `build/` and
   `scripts/`, are for development and must never reach a surface.
 - `make sync-core` is not automated on purpose. Vendoring is a decision to
@@ -232,8 +232,9 @@ properties matter here:
   `node-linker=hoisted` or otherwise flatten the store.
 
 pnpm blocks dependency lifecycle scripts and fails the install until each one
-is allowed or denied in `pnpm-workspace.yaml` under `allowBuilds`. Only
-`lefthook` has one. If a new dependency wants a build script, decide on purpose.
+is allowed or denied in `pnpm-workspace.yaml` under `allowBuilds`. No
+dependency has one today. If a new dependency wants a build script, decide on
+purpose.
 
 ## Prior art and credit
 

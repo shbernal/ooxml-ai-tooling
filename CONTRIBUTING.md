@@ -25,3 +25,5 @@ make sync-core test check-vendor
 ```
 
 [`AGENTS.md`](AGENTS.md) has the rest: the scope boundary, the vendoring rule, and which changes ship on which surface.
+
+Commit messages carry no AI attribution: no `Co-authored-by:` trailer for a tool, no "Generated with" line. CI checks this against `.github/cchk.toml`. Disclose AI help in the pull request description instead, where the template asks for it.
