@@ -409,6 +409,3 @@ describe('goldens', () => {
     assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort());
   });
 });
-
-// Keep the path join referenced so a future move of GOLDEN is a one-line edit.
-export const goldenPath = join(GOLDEN);

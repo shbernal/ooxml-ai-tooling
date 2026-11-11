@@ -13,7 +13,7 @@
  * the files it publishes.
  */
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
+import {execFileSync, spawnSync} from 'node:child_process';
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {before, describe, test} from 'node:test';
@@ -83,11 +83,13 @@ describe('the CLI contract', () => {
     // The experimental SQLite warning would land on stderr and an agent piping
     // this into a parser would see it. This is the assertion that keeps the
     // warning filter honest.
-    const result = execFileSync(process.execPath, [CLI, 'element', 'w:tbl', '--compact'], {
+    const result = spawnSync(process.execPath, [CLI, 'element', 'w:tbl', '--compact'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    assert.doesNotThrow(() => JSON.parse(result));
+    assert.equal(result.status, 0);
+    assert.equal(result.stderr, '');
+    assert.doesNotThrow(() => JSON.parse(result.stdout));
   });
 
   test('accepts every qname spelling', () => {
