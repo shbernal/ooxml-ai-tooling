@@ -37,7 +37,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "^2.3.0",
-    "zod": "^4.6.5"
+    "@modelcontextprotocol/server": "^2.4.0",
+    "zod": "^4.6.7"
   }
 }
