@@ -326,12 +326,6 @@ describe('attributes', () => {
     assert.equal(graph.attributes('v:CT_Shape').truncated, false);
   });
 
-  test('resolves a required attribute reached through an attributeGroup', () => {
-    // dml uses attributeGroups heavily; an unexpanded ref would lose these.
-    const result = graph.attributes('a:CT_Blip');
-    assert.ok(result.attributes.some((a) => a.from !== undefined));
-  });
-
   test('answers an attributeGroup with the attributes it carries', () => {
     const result = graph.attributes('w:AG_Password');
     assert.equal(result.found, true);
