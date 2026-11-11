@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           registry-url: https://registry.npmjs.org
@@ -70,7 +70,7 @@ jobs:
       # @latest: this job can mint a publish token, and whatever npm was
       # released minutes ago would run next to it and sign with provenance.
       - name: Upgrade npm to a version that can publish over OIDC
-        run: npm install -g npm@11.20.0
+        run: npm install -g npm@11.21.2
 
       # The tag is the only thing a human types at release time, and nothing
       # else ties it to what gets uploaded: tagging v0.2.0 without bumping the
@@ -138,7 +138,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
 
@@ -152,7 +152,7 @@ jobs:
       # complete` below exists: a pin protects against the bug we know about,
       # and that step protects against the next one.
       - name: Install clawhub
-        run: npm install -g clawhub@0.23.3
+        run: npm install -g clawhub@0.25.1
 
       - name: Authenticate to ClawHub
         run: clawhub auth login --token "${{ secrets.CLAWHUB_TOKEN }}" --no-browser

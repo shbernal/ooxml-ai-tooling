@@ -26,7 +26,7 @@ jobs:
 
       # Must precede setup-node: `cache: pnpm` needs the binary to already
       # exist. The version comes from `packageManager` in package.json.
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v7
         with:
@@ -93,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v7
         with:
@@ -112,3 +112,18 @@ jobs:
 
       - name: Verify
         run: pnpm run verify
+
+  # Commit messages carry no AI attribution. The rules live in .github/cchk.toml;
+  # the AI disclosure goes in the pull request description instead.
+  commit-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages against .github/cchk.toml
+        uses: commit-check/commit-check-action@v2
+        with:
+          message: true
+          branch: false
