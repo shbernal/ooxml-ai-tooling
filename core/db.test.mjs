@@ -7,17 +7,15 @@
  * columns have moved. Each guard turns that into a startup error naming the fix.
  */
 import assert from 'node:assert/strict';
-import {copyFileSync, existsSync, mkdirSync, rmSync} from 'node:fs';
+import {copyFileSync, mkdirSync, rmSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {before, describe, test} from 'node:test';
-import {buildDatabase} from '../build/build-db.mjs';
 import {EXPECTED_APPLICATION_ID, EXPECTED_USER_VERSION, openGraph} from './db.mjs';
 import {silenceSqliteExperimentalWarning} from './warnings.mjs';
 
 const DB = 'core/data/ooxml.db';
 
 before(() => {
-  if (!existsSync(DB)) buildDatabase(DB, {quiet: true});
   mkdirSync('.tmp', {recursive: true});
 });
 

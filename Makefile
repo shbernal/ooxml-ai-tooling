@@ -45,7 +45,7 @@ check-vendor:
 	@node build/check-vendor.mjs
 
 test:
-	node --test 'core/*.test.mjs' 'mcp/*.test.mjs'
+	node --test --test-global-setup=build/test-setup.mjs 'core/*.test.mjs' 'mcp/*.test.mjs'
 
 verify:
 	pnpm run verify

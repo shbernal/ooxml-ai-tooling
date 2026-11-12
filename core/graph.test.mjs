@@ -5,9 +5,7 @@
  * has.
  */
 import assert from 'node:assert/strict';
-import {existsSync} from 'node:fs';
 import {after, before, describe, test} from 'node:test';
-import {buildDatabase} from '../build/build-db.mjs';
 import {createGraph} from './graph.mjs';
 import {candidateVocabularies, loadVocabularyIndex, parseQName} from './qname.mjs';
 
@@ -15,7 +13,6 @@ const DB = 'core/data/ooxml.db';
 let graph;
 
 before(() => {
-  if (!existsSync(DB)) buildDatabase(DB, {quiet: true});
   graph = createGraph({path: DB});
 });
 after(() => graph?.close());

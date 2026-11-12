@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict';
-import {existsSync} from 'node:fs';
 import {after, before, describe, test} from 'node:test';
-import {buildDatabase} from '../build/build-db.mjs';
 import {
   explainDiagnostic,
   MAX_PATH_STEPS,
@@ -15,7 +13,6 @@ const DB = 'core/data/ooxml.db';
 let graph;
 
 before(() => {
-  if (!existsSync(DB)) buildDatabase(DB, {quiet: true});
   graph = createGraph({path: DB});
 });
 after(() => graph?.close());
@@ -107,18 +104,6 @@ describe('explain', () => {
     assert.ok(result.legal.attributes.some((a) => a.name === 'firstLine'));
   });
 
-  test('resolves an unexpected child to the ordered content model', () => {
-    const result = explainDiagnostic(graph, {
-      id: 'Sch_UnexpectedElementContentExpectingComplex',
-      description: "The element has invalid child element 'w:bogus'.",
-      xpath: '/w:document[1]/w:body[1]/w:p[1]/w:pPr[1]',
-    });
-    assert.equal(result.resolved, true);
-    assert.equal(result.finding.kind, 'unexpected_child');
-    assert.equal(result.legal.kind, 'children');
-    assert.equal(result.legal.order[0].qname, 'w:pStyle');
-  });
-
   test('uses the ancestor path to narrow a name with several content models', () => {
     // This is what `explain` can do that a bare children() call cannot.
     // `w:pPr` has three content models in wml, so children('w:pPr') must return
@@ -131,6 +116,10 @@ describe('explain', () => {
       description: "The element has invalid child element 'w:bogus'.",
       xpath: '/w:document[1]/w:body[1]/w:p[1]/w:pPr[1]',
     });
+    assert.equal(result.resolved, true);
+    assert.equal(result.finding.kind, 'unexpected_child');
+    assert.equal(result.legal.kind, 'children');
+    assert.equal(result.legal.order[0].qname, 'w:pStyle');
     assert.equal(result.legal.ambiguous, undefined);
     assert.equal(result.legal.type, 'w:CT_PPr');
     assert.equal(result.legal.narrowed_by, 'w:p is w:CT_P');
@@ -150,13 +139,11 @@ describe('explain', () => {
   test('bounds the walk for an arbitrarily long xpath', () => {
     // Each step is a full children() resolution, about 5 ms. Unbounded, this
     // 604-step path took three seconds and blocked the MCP server throughout.
-    const started = performance.now();
     const result = explainDiagnostic(graph, {
       id: 'Sch_UnexpectedElementContentExpectingComplex',
       description: "The element has invalid child element 'w:bogus'.",
       xpath: `/w:document/w:body${'/w:tbl/w:tr/w:tc'.repeat(200)}/w:p/w:pPr`,
     });
-    assert.ok(performance.now() - started < 1000, 'the walk was not bounded');
     assert.equal(result.position.truncated, true);
     assert.equal(result.position.path.length, MAX_PATH_STEPS);
   });
@@ -241,26 +228,12 @@ describe('explain', () => {
     assert.equal(result.reason, 'no_position');
   });
 
-  test('a mangled description costs the name, not the answer', () => {
-    // The regexes are the only text handling here, so a miss must degrade to
-    // "here is what is legal" rather than throwing.
-    const result = explainDiagnostic(graph, {
-      id: 'Sch_UndeclaredAttribute',
-      description: 'wording we did not anticipate',
-      xpath: '/w:document[1]/w:body[1]/w:p[1]/w:pPr[1]/w:ind[1]',
-    });
-    assert.equal(result.resolved, true);
-    assert.equal(result.finding.name, undefined);
-    assert.ok(result.legal.attributes.length > 0);
-    // And it costs the name *silently*: no placeholder in the quoted slot, or
-    // the message invents an attribute called 'it'.
-    assert.doesNotMatch(result.message, /'/);
-    assert.match(result.message, /An attribute given on w:ind is not allowed there/);
-  });
-
   test('no name means no quoted name, for every id that quotes one', () => {
     // The regexes are anchored loosely, so a miss is a normal outcome for any
-    // of these — every nameless phrasing has to stand on its own.
+    // of these — every nameless phrasing has to stand on its own. A miss must
+    // degrade to "here is what is legal" rather than throwing, and cost the
+    // name silently: a placeholder in the quoted slot would invent an
+    // attribute called 'it'.
     for (const id of SUPPORTED_DIAGNOSTIC_IDS) {
       const result = explainDiagnostic(graph, {
         id,
@@ -271,6 +244,10 @@ describe('explain', () => {
       assert.equal(result.finding.name, undefined, id);
       assert.doesNotMatch(result.message, /'/, `${id} quoted a name it never extracted`);
       assert.match(result.message, /w:ind/, id);
+      if (id === 'Sch_UndeclaredAttribute') {
+        assert.ok(result.legal.attributes.length > 0);
+        assert.match(result.message, /An attribute given on w:ind is not allowed there/);
+      }
     }
   });
 

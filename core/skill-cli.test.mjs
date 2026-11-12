@@ -16,16 +16,11 @@ import assert from 'node:assert/strict';
 import {execFileSync, spawnSync} from 'node:child_process';
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {before, describe, test} from 'node:test';
-import {buildDatabase} from '../build/build-db.mjs';
+import {describe, test} from 'node:test';
 import {CORE_FILES} from '../build/vendor.mjs';
 
 const SKILL = 'skill/scripts';
 const CLI = join(SKILL, 'ooxml.mjs');
-
-before(() => {
-  if (!existsSync('core/data/ooxml.db')) buildDatabase('core/data/ooxml.db', {quiet: true});
-});
 
 /** Every `from '...'` and `import('...')` specifier in a module. */
 function importsOf(path) {
