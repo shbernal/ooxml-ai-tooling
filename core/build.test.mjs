@@ -16,7 +16,6 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {
   copyFileSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -44,9 +43,6 @@ const GOLDEN = 'core/fixtures/graph.json';
 let db;
 
 before(() => {
-  // A cold clone has no database — it is build output and gitignored — so build
-  // it rather than failing with something that reads like a broken checkout.
-  if (!existsSync(DB)) buildDatabase(DB, {quiet: true});
   db = new DatabaseSync(DB, {readOnly: true});
 });
 
